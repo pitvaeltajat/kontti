@@ -62,7 +62,7 @@ export default async function KammiPage() {
       )}
       {settings.heroImageUrl && (
         <div
-          className="relative mb-8 flex min-h-64 items-end overflow-hidden rounded-xl border bg-muted bg-cover bg-center shadow-sm sm:min-h-80"
+          className="relative mb-8 flex min-h-64 items-end overflow-hidden rounded-lg border bg-muted bg-cover bg-center shadow-sm sm:min-h-80"
           style={{
             backgroundImage: `linear-gradient(90deg, rgb(0 0 0 / 0.68), rgb(0 0 0 / 0.16)), url("${settings.heroImageUrl}")`,
           }}
