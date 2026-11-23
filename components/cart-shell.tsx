@@ -51,9 +51,9 @@ type FetchedItem = {
 type AnswerValue = string | string[];
 type Answers = Record<string, Record<string, AnswerValue[]>>;
 
-const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-  ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
-  : null;
+const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
+const stripeConfigured = stripePromise !== null;
 
 export function CartShell({ initialUser }: { initialUser: { name: string; email: string } }) {
   const router = useRouter();
@@ -339,11 +339,13 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
   useEffect(() => {
     if (
       !catalogLoaded ||
+      !stripeConfigured ||
       deferredCheckout ||
       freeEventRegistration ||
       hasInvalidVariant ||
       clientSecret ||
       loading ||
+      error ||
       autoCheckoutStarted.current
     ) {
       return;
@@ -352,8 +354,16 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
     if (lines.some(({ cartItem, item }) => item && missingAnswerMessage(item, cartItem.quantity))) {
       return;
     }
-    autoCheckoutStarted.current = true;
-    const timer = window.setTimeout(() => void goToCheckout(), 0);
+    // Wait for the buyer to stop editing answers before starting a checkout.
+    // The real card form needs the names as typed, and starting on the first
+    // keystroke would snapshot a half-written participant name. Marking the
+    // checkout as started only when the timer really fires also means a
+    // dependency change that cancels it can schedule the next attempt instead
+    // of leaving the summary stuck on "Valmistellaan maksutapoja…" forever.
+    const timer = window.setTimeout(() => {
+      autoCheckoutStarted.current = true;
+      void goToCheckout();
+    }, 500);
     return () => window.clearTimeout(timer);
   }, [
     answers,
@@ -362,6 +372,7 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
     discount,
     email,
     clientSecret,
+    error,
     freeEventRegistration,
     hasInvalidVariant,
     goToCheckout,
@@ -733,7 +744,12 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
           <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
         )}
 
-        {clientSecret && stripePromise && !deferredCheckout ? (
+        {!deferredCheckout && !freeEventRegistration && !stripeConfigured ? (
+          <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+            Verkkomaksaminen ei ole juuri nyt käytössä. Ota yhteyttä ylläpitoon.
+            {eventOnly && ' Voit myös valita vanhemman maksaman maksuohjeen.'}
+          </p>
+        ) : clientSecret && stripePromise && !deferredCheckout ? (
           <CheckoutElementsProvider
             stripe={stripePromise}
             options={{
