@@ -19,7 +19,10 @@ export default async function EventPaymentPage({ params }: { params: Promise<{ t
           item: {
             select: { isEvent: true, startsAt: true, endsAt: true, registrationDeadline: true },
           },
-          participants: { select: { id: true, name: true }, orderBy: { createdAt: 'asc' } },
+          participants: {
+            select: { id: true, name: true, cancelledAt: true },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       },
     },
@@ -30,7 +33,11 @@ export default async function EventPaymentPage({ params }: { params: Promise<{ t
   const eventName = order.lines.map((line) => line.name).join(', ');
   const dates = formatEventDates(event.startsAt, event.endsAt);
   const participants = order.lines.flatMap((line) =>
-    line.participants.map((participant) => ({ id: participant.id, name: participant.name })),
+    line.participants.map((participant) => ({
+      id: participant.id,
+      name: participant.name,
+      cancelled: Boolean(participant.cancelledAt) || order.status === 'CANCELLED',
+    })),
   );
   const deadlines = order.lines
     .map((line) => line.item.registrationDeadline)

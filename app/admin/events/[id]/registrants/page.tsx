@@ -39,6 +39,10 @@ export default async function EventRegistrationsPage({
         OR: [
           { status: { in: ['PAID', 'COMPLETED'] } },
           { status: 'RECEIVED', stripeInvoiceId: { not: null } },
+          {
+            status: 'CANCELLED',
+            OR: [{ paidAt: { not: null } }, { stripeInvoiceId: { not: null } }],
+          },
         ],
       },
       select: {
@@ -53,7 +57,7 @@ export default async function EventRegistrationsPage({
             quantity: true,
             answers: true,
             participants: {
-              select: { id: true, name: true, answers: true },
+              select: { id: true, name: true, answers: true, cancelledAt: true },
               orderBy: { createdAt: 'asc' },
             },
           },
@@ -75,14 +79,18 @@ export default async function EventRegistrationsPage({
           ? line.participants.map((participant) => ({
               name: participant.name,
               answers: (participant.answers as AnswerSnapshot[] | null) ?? [],
+              cancelledAt: participant.cancelledAt,
             }))
-          : splitParticipantAnswers(line.quantity, (line.answers as AnswerSnapshot[] | null) ?? []);
+          : splitParticipantAnswers(line.quantity, (line.answers as AnswerSnapshot[] | null) ?? []).map(
+              (participant) => ({ ...participant, cancelledAt: null }),
+            );
       return list.map((participant, participantIndex) => ({
         id: `${order.id}-${lineIndex}-${participantIndex}`,
         name: participant.name,
         answers: participant.answers,
         email: order.email,
-        status: order.status,
+        status:
+          participant.cancelledAt || order.status === 'CANCELLED' ? 'CANCELLED' : order.status,
         createdAt: order.createdAt.toISOString(),
       }));
     }),
@@ -154,7 +162,7 @@ export default async function EventRegistrationsPage({
     { key: 'status', label: 'Tila', kind: 'status' },
   ];
 
-  const spots = rows.length;
+  const spots = rows.filter((row) => row.status !== 'CANCELLED').length;
   const emails = [...new Set(rows.map((row) => row.email?.trim()).filter((e): e is string => !!e))];
 
   return (

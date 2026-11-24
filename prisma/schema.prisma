@@ -242,6 +242,7 @@ model Participant {
   name        String
   answers     Json?
   createdAt   DateTime  @default(now())
+  cancelledAt DateTime?
 
   @@index([orderLineId])
 }

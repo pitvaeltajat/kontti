@@ -34,7 +34,7 @@ export function EventPayment({
   token: string;
   eventName: string;
   dates: string;
-  participants: { id: string; name: string }[];
+  participants: { id: string; name: string; cancelled: boolean }[];
   total: string;
   status: string;
   registrationDeadline: string | null;
@@ -219,21 +219,33 @@ export function EventPayment({
                       key={participant.id}
                       className="flex flex-wrap items-center justify-between gap-2"
                     >
-                      <span>{participant.name}</span>
-                      {!cancelled && canCancel && participants.length > 1 && (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() =>
-                            void cancelParticipant(participant.id, participant.name)
-                          }
-                          disabled={loading}
-                        >
-                          Peru ilmoittautuminen
-                        </Button>
-                      )}
+                      <span
+                        className={
+                          participant.cancelled ? 'text-muted-foreground line-through' : undefined
+                        }
+                      >
+                        {participant.name}
+                        {participant.cancelled && (
+                          <span className="ml-1 no-underline">(peruttu)</span>
+                        )}
+                      </span>
+                      {!participant.cancelled &&
+                        !cancelled &&
+                        canCancel &&
+                        participants.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() =>
+                              void cancelParticipant(participant.id, participant.name)
+                            }
+                            disabled={loading}
+                          >
+                            Peru ilmoittautuminen
+                          </Button>
+                        )}
                     </li>
                   ))}
                 </ul>

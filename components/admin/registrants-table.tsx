@@ -26,7 +26,9 @@ export type RegistrantRow = {
 type Sort = { key: string; direction: 'asc' | 'desc' };
 
 function statusLabel(status: string): string {
-  return status === 'RECEIVED' ? 'Lasku avoinna' : 'Maksettu';
+  if (status === 'RECEIVED') return 'Lasku avoinna';
+  if (status === 'CANCELLED') return 'Peruutettu';
+  return 'Maksettu';
 }
 
 function dateLabel(iso: string): string {
@@ -183,6 +185,8 @@ export function RegistrantsTable({
                     {column.kind === 'status' ? (
                       row.status === 'RECEIVED' ? (
                         <Badge variant="warning">Lasku avoinna</Badge>
+                      ) : row.status === 'CANCELLED' ? (
+                        <Badge variant="secondary">Peruutettu</Badge>
                       ) : (
                         <Badge variant="success">Maksettu</Badge>
                       )

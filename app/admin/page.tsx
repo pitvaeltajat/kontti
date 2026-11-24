@@ -39,7 +39,10 @@ export default async function AdminOrdersPage({
       lines: {
         include: {
           item: { select: { id: true, name: true, isEvent: true } },
-          participants: { select: { id: true, name: true }, orderBy: { createdAt: 'asc' } },
+          participants: {
+            select: { id: true, name: true, cancelledAt: true },
+            orderBy: { createdAt: 'asc' },
+          },
         },
       },
     },
@@ -165,37 +168,55 @@ export default async function AdminOrdersPage({
                             </Link>
                           </span>
                           <span className="shrink-0 text-muted-foreground">
-                            {line.quantity > 1
-                              ? `${line.quantity} × ${formatCents(line.priceCents)}`
-                              : formatCents(line.priceCents)}
+                            {line.quantity === 0
+                              ? `0 × ${formatCents(line.priceCents)}`
+                              : line.quantity > 1
+                                ? `${line.quantity} × ${formatCents(line.priceCents)}`
+                                : formatCents(line.priceCents)}
                           </span>
                         </div>
                         {line.participants.length > 0 && (
                           <ul className="ml-4 divide-y text-xs">
-                            {line.participants.map((participant) => (
-                              <li
-                                key={participant.id}
-                                className="flex flex-wrap items-center justify-between gap-2 py-1 first:pt-0 last:pb-0"
-                              >
-                                <span className="text-muted-foreground">{participant.name}</span>
-                                {(order.status === 'RECEIVED' || order.status === 'PAID') && (
-                                  <form action={cancelParticipant} className="relative z-10">
-                                    <input
-                                      type="hidden"
-                                      name="participantId"
-                                      value={participant.id}
-                                    />
-                                    <FormButton
-                                      size="sm"
-                                      variant="ghost"
-                                      confirm={`Perutaanko ${participant.name}?`}
-                                    >
-                                      Peru tilaus
-                                    </FormButton>
-                                  </form>
-                                )}
-                              </li>
-                            ))}
+                            {line.participants.map((participant) => {
+                              const participantCancelled =
+                                Boolean(participant.cancelledAt) || order.status === 'CANCELLED';
+                              return (
+                                <li
+                                  key={participant.id}
+                                  className="flex flex-wrap items-center justify-between gap-2 py-1 first:pt-0 last:pb-0"
+                                >
+                                  <span
+                                    className={
+                                      participantCancelled
+                                        ? 'text-muted-foreground line-through'
+                                        : 'text-muted-foreground'
+                                    }
+                                  >
+                                    {participant.name}
+                                    {participantCancelled && (
+                                      <span className="ml-1 no-underline">(peruttu)</span>
+                                    )}
+                                  </span>
+                                  {!participantCancelled &&
+                                    (order.status === 'RECEIVED' || order.status === 'PAID') && (
+                                      <form action={cancelParticipant} className="relative z-10">
+                                        <input
+                                          type="hidden"
+                                          name="participantId"
+                                          value={participant.id}
+                                        />
+                                        <FormButton
+                                          size="sm"
+                                          variant="ghost"
+                                          confirm={`Perutaanko ${participant.name}?`}
+                                        >
+                                          Peru tilaus
+                                        </FormButton>
+                                      </form>
+                                    )}
+                                </li>
+                              );
+                            })}
                           </ul>
                         )}
                         {answers.length > 0 && (

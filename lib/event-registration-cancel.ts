@@ -19,6 +19,7 @@ const CANCELLABLE = ['RECEIVED', 'PAID', 'COMPLETED'] as const;
 const participantSelect = {
   id: true,
   name: true,
+  cancelledAt: true,
   orderLine: {
     select: {
       id: true,
@@ -42,6 +43,7 @@ const participantSelect = {
 type ParticipantForCancel = {
   id: string;
   name: string;
+  cancelledAt: Date | null;
   orderLine: {
     id: string;
     quantity: number;
@@ -68,6 +70,9 @@ function assertCancellable(participant: ParticipantForCancel, orderId?: string) 
   }
   if (order.status === 'RECEIVED' && order.stripeInvoiceId) {
     throw new CancelError('Laskullisen ilmoittautumisen voi perua vain kokonaan.', 400);
+  }
+  if (participant.cancelledAt) {
+    throw new CancelError('Ilmoittautuminen on jo peruttu.', 400);
   }
 }
 
@@ -139,17 +144,16 @@ export async function cancelParticipantRegistration(
       assertCancellable(current, options.orderId);
 
       const line = current.orderLine;
-      const deleted = await tx.participant.deleteMany({
-        where: { id: current.id, orderLineId: line.id },
+      const cancelled = await tx.participant.updateMany({
+        where: { id: current.id, orderLineId: line.id, cancelledAt: null },
+        data: { cancelledAt: new Date() },
       });
-      if (deleted.count !== 1) throw new CancelError('Ilmoittautumista ei löydy.', 404);
+      if (cancelled.count !== 1) throw new CancelError('Ilmoittautuminen on jo peruttu.', 400);
 
-      const nextQuantity = line.quantity - 1;
-      if (nextQuantity <= 0) {
-        await tx.orderLine.delete({ where: { id: line.id } });
-      } else {
-        await tx.orderLine.update({ where: { id: line.id }, data: { quantity: nextQuantity } });
-      }
+      await tx.orderLine.update({
+        where: { id: line.id },
+        data: { quantity: Math.max(0, line.quantity - 1) },
+      });
 
       if (
         (line.order.status === 'PAID' || line.order.status === 'COMPLETED') &&
@@ -161,8 +165,11 @@ export async function cancelParticipantRegistration(
         });
       }
 
-      const remainingLines = await tx.orderLine.count({ where: { orderId: line.order.id } });
-      const orderCancelled = remainingLines === 0;
+      const remainingLines = await tx.orderLine.findMany({
+        where: { orderId: line.order.id },
+        select: { quantity: true },
+      });
+      const orderCancelled = !remainingLines.some((remaining) => remaining.quantity > 0);
       await tx.order.update({
         where: { id: line.order.id },
         data: {
