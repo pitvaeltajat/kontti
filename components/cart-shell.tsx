@@ -290,7 +290,6 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
         return;
       }
       if (data.paymentMethod === 'deferred_event' && data.paymentToken) {
-        cartStore.clear();
         router.push(`/event-payment/${encodeURIComponent(data.paymentToken)}`);
         return;
       }

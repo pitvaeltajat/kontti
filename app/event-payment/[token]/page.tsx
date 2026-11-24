@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { formatCents } from '@/lib/money';
 import { formatEventDates } from '@/lib/catalog';
 import { canCancelEventRegistration } from '@/lib/event-registration';
+import { ClearCartOnSuccess } from '@/components/clear-cart-on-success';
 import { EventPayment } from '@/components/event-payment';
 
 export const metadata: Metadata = { title: 'Tapahtumamaksu' };
@@ -37,15 +38,18 @@ export default async function EventPaymentPage({ params }: { params: Promise<{ t
     : null;
 
   return (
-    <EventPayment
-      token={token}
-      eventName={eventName}
-      dates={dates}
-      participants={participants}
-      total={formatCents(order.totalCents)}
-      status={order.status}
-      registrationDeadline={registrationDeadline?.toLocaleDateString('fi-FI') ?? null}
-      canCancel={canCancelEventRegistration(registrationDeadline)}
-    />
+    <>
+      <ClearCartOnSuccess />
+      <EventPayment
+        token={token}
+        eventName={eventName}
+        dates={dates}
+        participants={participants}
+        total={formatCents(order.totalCents)}
+        status={order.status}
+        registrationDeadline={registrationDeadline?.toLocaleDateString('fi-FI') ?? null}
+        canCancel={canCancelEventRegistration(registrationDeadline)}
+      />
+    </>
   );
 }
