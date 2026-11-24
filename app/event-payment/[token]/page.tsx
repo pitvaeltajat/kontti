@@ -19,7 +19,7 @@ export default async function EventPaymentPage({ params }: { params: Promise<{ t
           item: {
             select: { isEvent: true, startsAt: true, endsAt: true, registrationDeadline: true },
           },
-          participants: { select: { name: true }, orderBy: { createdAt: 'asc' } },
+          participants: { select: { id: true, name: true }, orderBy: { createdAt: 'asc' } },
         },
       },
     },
@@ -29,7 +29,9 @@ export default async function EventPaymentPage({ params }: { params: Promise<{ t
   const event = order.lines[0].item;
   const eventName = order.lines.map((line) => line.name).join(', ');
   const dates = formatEventDates(event.startsAt, event.endsAt);
-  const participants = order.lines.flatMap((line) => line.participants.map((p) => p.name));
+  const participants = order.lines.flatMap((line) =>
+    line.participants.map((participant) => ({ id: participant.id, name: participant.name })),
+  );
   const deadlines = order.lines
     .map((line) => line.item.registrationDeadline)
     .filter((deadline): deadline is Date => Boolean(deadline));

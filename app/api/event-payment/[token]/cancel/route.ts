@@ -3,9 +3,19 @@ import { prisma } from '@/lib/prisma';
 import { getStripe } from '@/lib/stripe';
 import { sendEventCancellationEmail, trySendEmail } from '@/lib/emails';
 import { canCancelEventRegistration } from '@/lib/event-registration';
+import { cancelParticipantRegistration } from '@/lib/event-registration-cancel';
 
-export async function POST(_req: Request, { params }: { params: Promise<{ token: string }> }) {
+export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
+  let participantId: string | null = null;
+  try {
+    const body = (await req.json()) as { participantId?: unknown };
+    if (typeof body.participantId === 'string' && body.participantId.length <= 100) {
+      participantId = body.participantId;
+    }
+  } catch {
+    // No body means cancel the whole registration.
+  }
   const order = await prisma.order.findUnique({
     where: { paymentToken: token },
     select: {
@@ -31,6 +41,21 @@ export async function POST(_req: Request, { params }: { params: Promise<{ token:
       { error: 'IlmoDL on päättynyt. Ilmoittautumista ei voi enää perua tämän linkin kautta.' },
       { status: 400 },
     );
+  }
+
+  if (participantId) {
+    const result = await cancelParticipantRegistration(participantId, {
+      refund: true,
+      orderId: order.id,
+    });
+    if (!result.ok) return NextResponse.json({ error: result.error }, { status: result.status });
+    await trySendEmail(`event participant cancellation ${order.id}`, () =>
+      sendEventCancellationEmail(
+        order.id,
+        result.orderCancelled ? undefined : result.participantName,
+      ),
+    );
+    return NextResponse.json({ cancelled: true, orderCancelled: result.orderCancelled });
   }
 
   if (['PAID', 'COMPLETED'].includes(order.status) && order.totalCents > 0) {

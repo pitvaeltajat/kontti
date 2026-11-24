@@ -13,6 +13,7 @@ import { LEADER_DISCOUNT_CODE, normalizeCode } from '@/lib/discount';
 import { isSystemCategorySlug } from '@/lib/categories';
 import { DEFAULT_EVENT_ACCOUNTING_CLASS_NAME } from '@/lib/accounting';
 import { defaultRegistrationDeadline } from '@/lib/event-registration';
+import { cancelParticipantRegistration } from '@/lib/event-registration-cancel';
 
 export type ActionResult = { error?: string };
 
@@ -578,5 +579,17 @@ export async function cancelOrder(formData: FormData): Promise<void> {
     where: { id },
     data: { status: 'CANCELLED' },
   });
+  revalidatePath('/admin');
+}
+
+export async function cancelParticipant(formData: FormData): Promise<void> {
+  if (!isSuperAdmin(await currentRole())) return;
+  const participantId = ((formData.get('participantId') as string) ?? '').trim();
+  if (!participantId) return;
+
+  const result = await cancelParticipantRegistration(participantId, { refund: false });
+  if (!result.ok) {
+    redirect(`/admin?error=${encodeURIComponent(result.error)}`);
+  }
   revalidatePath('/admin');
 }

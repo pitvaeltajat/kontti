@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useSyncExternalStore } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   CheckoutElementsProvider,
   ExpressCheckoutElement,
@@ -33,12 +34,13 @@ export function EventPayment({
   token: string;
   eventName: string;
   dates: string;
-  participants: string[];
+  participants: { id: string; name: string }[];
   total: string;
   status: string;
   registrationDeadline: string | null;
   canCancel: boolean;
 }) {
+  const router = useRouter();
   const [parentEmail, setParentEmail] = useState('');
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -130,8 +132,11 @@ export function EventPayment({
   const paid = currentStatus === 'PAID' || currentStatus === 'COMPLETED';
   const cancelled = currentStatus === 'CANCELLED';
   async function cancelRegistration() {
-    if (!window.confirm('Perutaanko ilmoittautuminen? Tätä ei voi palauttaa tästä linkistä.'))
-      return;
+    const message =
+      participants.length > 1
+        ? 'Perutaanko kaikki ilmoittautumiset? Tätä ei voi palauttaa tästä linkistä.'
+        : 'Perutaanko ilmoittautuminen? Tätä ei voi palauttaa tästä linkistä.';
+    if (!window.confirm(message)) return;
     setError(null);
     setLoading(true);
     try {
@@ -144,6 +149,40 @@ export function EventPayment({
         return;
       }
       setCurrentStatus('CANCELLED');
+      router.refresh();
+    } catch {
+      setError('Ilmoittautumista ei voitu perua. Tarkista yhteys ja yritä uudelleen.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function cancelParticipant(participantId: string, participantName: string) {
+    if (
+      !window.confirm(
+        `Perutaanko ${participantName}? Tätä ei voi palauttaa tästä linkistä.`,
+      )
+    )
+      return;
+    setError(null);
+    setLoading(true);
+    try {
+      const response = await fetch(`/api/event-payment/${encodeURIComponent(token)}/cancel`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ participantId }),
+      });
+      const data = (await response.json()) as {
+        error?: string;
+        cancelled?: boolean;
+        orderCancelled?: boolean;
+      };
+      if (!response.ok || !data.cancelled) {
+        setError(data.error ?? 'Ilmoittautumista ei voitu perua.');
+        return;
+      }
+      if (data.orderCancelled) setCurrentStatus('CANCELLED');
+      router.refresh();
     } catch {
       setError('Ilmoittautumista ei voitu perua. Tarkista yhteys ja yritä uudelleen.');
     } finally {
@@ -172,7 +211,33 @@ export function EventPayment({
             <p className="font-semibold">{eventName}</p>
             {dates && <p className="text-muted-foreground">{dates}</p>}
             {participants.length > 0 && (
-              <p className="mt-2">Osallistuja: {participants.join(', ')}</p>
+              <div className="mt-2 space-y-1">
+                <p className="font-medium">Osallistujat</p>
+                <ul className="space-y-1">
+                  {participants.map((participant) => (
+                    <li
+                      key={participant.id}
+                      className="flex flex-wrap items-center justify-between gap-2"
+                    >
+                      <span>{participant.name}</span>
+                      {!cancelled && canCancel && participants.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          onClick={() =>
+                            void cancelParticipant(participant.id, participant.name)
+                          }
+                          disabled={loading}
+                        >
+                          Peru ilmoittautuminen
+                        </Button>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             <p className="mt-2 text-lg font-bold">{total}</p>
           </div>
@@ -272,7 +337,9 @@ export function EventPayment({
                 onClick={cancelRegistration}
                 disabled={loading}
               >
-                Peru ilmoittautuminen
+                {participants.length > 1
+                  ? 'Peru kaikki ilmoittautumiset'
+                  : 'Peru ilmoittautuminen'}
               </Button>
             </section>
           )}
