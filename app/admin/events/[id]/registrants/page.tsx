@@ -2,21 +2,24 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ChevronLeft } from 'lucide-react';
-import { format } from 'date-fns';
-import { fi } from 'date-fns/locale';
 import { prisma } from '@/lib/prisma';
 import { formatEventDates } from '@/lib/catalog';
 import { requireEventAdmin } from '@/lib/admin-guard';
-import { splitParticipantAnswers, type AnswerSnapshot } from '@/lib/questions';
-import { Badge } from '@/components/ui/badge';
+import {
+  DIETARY_REQUIREMENTS_QUESTION,
+  PARTICIPANT_NAME_QUESTION,
+  splitParticipantAnswers,
+  type AnswerSnapshot,
+} from '@/lib/questions';
+import { slugify } from '@/lib/slug';
 import { RegistrantEmails } from '@/components/admin/registrant-emails';
+import {
+  RegistrantsTable,
+  type RegistrantColumn,
+  type RegistrantRow,
+} from '@/components/admin/registrants-table';
 
 export const metadata: Metadata = { title: 'Ilmoittautuneet' };
-
-function formatAnswer(answer: string | string[] | undefined): string {
-  if (Array.isArray(answer)) return answer.join(', ');
-  return answer ?? '';
-}
 
 export default async function EventRegistrationsPage({
   params,
@@ -29,56 +32,130 @@ export default async function EventRegistrationsPage({
   const event = await prisma.item.findUnique({ where: { id } });
   if (!event || !event.isEvent) notFound();
 
-  const orders = await prisma.order.findMany({
-    where: {
-      lines: { some: { itemId: id } },
-      OR: [
-        { status: { in: ['PAID', 'COMPLETED'] } },
-        { status: 'RECEIVED', stripeInvoiceId: { not: null } },
-      ],
-    },
-    select: {
-      id: true,
-      name: true,
-      email: true,
-      status: true,
-      createdAt: true,
-      lines: {
-        where: { itemId: id },
-        select: {
-          quantity: true,
-          answers: true,
-          participants: {
-            select: { id: true, name: true, answers: true },
-            orderBy: { createdAt: 'asc' },
+  const [orders, questions] = await Promise.all([
+    prisma.order.findMany({
+      where: {
+        lines: { some: { itemId: id } },
+        OR: [
+          { status: { in: ['PAID', 'COMPLETED'] } },
+          { status: 'RECEIVED', stripeInvoiceId: { not: null } },
+        ],
+      },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        status: true,
+        createdAt: true,
+        lines: {
+          where: { itemId: id },
+          select: {
+            quantity: true,
+            answers: true,
+            participants: {
+              select: { id: true, name: true, answers: true },
+              orderBy: { createdAt: 'asc' },
+            },
           },
         },
       },
-    },
-    orderBy: { createdAt: 'asc' },
-  });
+      orderBy: { createdAt: 'asc' },
+    }),
+    prisma.itemQuestion.findMany({
+      where: { itemId: id },
+      orderBy: { sortOrder: 'asc' },
+      select: { id: true, prompt: true },
+    }),
+  ]);
 
-  const rows = orders.flatMap((order) =>
-    order.lines.flatMap((line, lineIndex) =>
-      (line.participants.length > 0
-        ? line.participants.map((participant) => ({
-            name: participant.name,
-            answers: (participant.answers as AnswerSnapshot[] | null) ?? [],
-          }))
-        : splitParticipantAnswers(line.quantity, (line.answers as AnswerSnapshot[] | null) ?? [])
-      ).map((participant, participantIndex) => ({
+  const participants = orders.flatMap((order) =>
+    order.lines.flatMap((line, lineIndex) => {
+      const list =
+        line.participants.length > 0
+          ? line.participants.map((participant) => ({
+              name: participant.name,
+              answers: (participant.answers as AnswerSnapshot[] | null) ?? [],
+            }))
+          : splitParticipantAnswers(line.quantity, (line.answers as AnswerSnapshot[] | null) ?? []);
+      return list.map((participant, participantIndex) => ({
         id: `${order.id}-${lineIndex}-${participantIndex}`,
         name: participant.name,
+        answers: participant.answers,
         email: order.email,
         status: order.status,
-        createdAt: order.createdAt,
-        answers: participant.answers,
-      })),
-    ),
+        createdAt: order.createdAt.toISOString(),
+      }));
+    }),
   );
 
+  // One column per checkout question. The participant name is already the
+  // "Nimi" column; every other answer (including the injected dietary question)
+  // gets its own column. Answers to since-deleted/renamed questions are kept
+  // as extra columns by prompt so no submitted data is hidden.
+  const seenKeys = new Set<string>();
+  const knownColumns: { key: string; label: string }[] = [];
+  for (const column of [
+    { key: DIETARY_REQUIREMENTS_QUESTION.id, label: DIETARY_REQUIREMENTS_QUESTION.prompt },
+    ...questions.map((question) => ({ key: question.id, label: question.prompt })),
+  ]) {
+    if (column.key === PARTICIPANT_NAME_QUESTION.id || seenKeys.has(column.key)) continue;
+    seenKeys.add(column.key);
+    knownColumns.push(column);
+  }
+  const knownKeyByPrompt = new Map(knownColumns.map((column) => [column.label, column.key]));
+
+  const extraLabels = new Set<string>();
+  for (const participant of participants) {
+    for (const answer of participant.answers) {
+      if (!answer.prompt || answer.questionId === PARTICIPANT_NAME_QUESTION.id) continue;
+      if (seenKeys.has(answer.questionId) || knownKeyByPrompt.has(answer.prompt)) continue;
+      extraLabels.add(answer.prompt);
+    }
+  }
+  const answerColumns = [
+    ...knownColumns,
+    ...[...extraLabels]
+      .sort((a, b) => a.localeCompare(b, 'fi'))
+      .map((label) => ({ key: `prompt:${label}`, label })),
+  ];
+
+  const rows: RegistrantRow[] = participants.map((participant) => {
+    const answers = new Map<string, string>();
+    for (const answer of participant.answers) {
+      const value = Array.isArray(answer.answer) ? answer.answer.join(', ') : (answer.answer ?? '');
+      answers.set(answer.questionId, value);
+      if (answer.prompt) {
+        answers.set(`prompt:${answer.prompt}`, value);
+        const knownKey = knownKeyByPrompt.get(answer.prompt);
+        if (knownKey) answers.set(knownKey, value);
+      }
+    }
+    return {
+      id: participant.id,
+      name: participant.name,
+      email: participant.email,
+      createdAt: participant.createdAt,
+      status: participant.status,
+      answers: Object.fromEntries(
+        answerColumns.map((column) => [column.key, answers.get(column.key) ?? '']),
+      ),
+    };
+  });
+
+  const columns: RegistrantColumn[] = [
+    { key: 'name', label: 'Nimi', kind: 'name' },
+    { key: 'email', label: 'Sähköposti', kind: 'email' },
+    ...answerColumns.map((column) => ({
+      key: column.key,
+      label: column.label,
+      kind: 'answer' as const,
+    })),
+    { key: 'createdAt', label: 'Ilmoittautui', kind: 'date' },
+    { key: 'status', label: 'Tila', kind: 'status' },
+  ];
+
   const spots = rows.length;
-  const emails = [...new Set(rows.map((r) => r.email?.trim()).filter((e): e is string => !!e))];
+  const emails = [...new Set(rows.map((row) => row.email?.trim()).filter((e): e is string => !!e))];
 
   return (
     <div>
@@ -103,52 +180,12 @@ export default async function EventRegistrationsPage({
           <div className="mt-6">
             <RegistrantEmails emails={emails} subject={event.name} />
           </div>
-
-          <div className="mt-6 overflow-x-auto rounded-lg border bg-card shadow-sm">
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase text-muted-foreground">
-                  <th className="px-4 py-3">Nimi</th>
-                  <th className="px-4 py-3">Sähköposti</th>
-                  <th className="px-4 py-3">Lisätiedot</th>
-                  <th className="px-4 py-3">Ilmoittautui</th>
-                  <th className="px-4 py-3">Tila</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="border-b align-top transition-colors last:border-0 hover:bg-muted/40"
-                  >
-                    <td className="px-4 py-3 font-medium">{row.name}</td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {row.email ?? 'ei sähköpostia'}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {row.answers.length === 0
-                        ? 'ei vastauksia'
-                        : row.answers.map((a, i) => (
-                            <div key={i}>
-                              {a.prompt ? <span className="font-medium">{a.prompt}: </span> : null}
-                              {formatAnswer(a.answer)}
-                            </div>
-                          ))}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {format(row.createdAt, 'd.M.yyyy', { locale: fi })}
-                    </td>
-                    <td className="px-4 py-3">
-                      {row.status === 'RECEIVED' ? (
-                        <Badge variant="warning">Lasku avoinna</Badge>
-                      ) : (
-                        <Badge variant="success">Maksettu</Badge>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="mt-6">
+            <RegistrantsTable
+              rows={rows}
+              columns={columns}
+              fileName={`${slugify(event.name)}-ilmoittautuneet`}
+            />
           </div>
         </>
       )}
