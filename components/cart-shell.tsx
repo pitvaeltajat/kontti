@@ -73,7 +73,6 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
   const checkoutGeneration = useRef(0);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'deferred'>('card');
   const participantNamesPrefilled = useRef(false);
-  const autoCheckoutStarted = useRef(false);
 
   const ids = useMemo(() => items.map((i) => i.id).sort(), [items]);
   const idsKey = ids.join(',');
@@ -199,7 +198,6 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
     setClientSecret(null);
     setLoading(false);
     checkoutGeneration.current += 1;
-    autoCheckoutStarted.current = false;
     setError(null);
   }
 
@@ -287,7 +285,6 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
       };
       if (checkoutGeneration.current !== requestGeneration) return;
       if (!res.ok) {
-        autoCheckoutStarted.current = false;
         checkoutRequestKey.current = null;
         setError(data.error ?? 'Maksua ei voitu aloittaa. Yritä uudelleen.');
         return;
@@ -312,13 +309,11 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
         return;
       }
       if (!data.clientSecret) {
-        autoCheckoutStarted.current = false;
         setError('Maksua ei voitu aloittaa. Yritä uudelleen.');
         return;
       }
     } catch {
       if (checkoutGeneration.current !== requestGeneration) return;
-      autoCheckoutStarted.current = false;
       setError('Maksua ei voitu aloittaa. Tarkista yhteys ja yritä uudelleen.');
     } finally {
       if (checkoutGeneration.current === requestGeneration) setLoading(false);
@@ -335,57 +330,6 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
     missingAnswerMessage,
     router,
   ]);
-
-  useEffect(() => {
-    if (
-      !catalogLoaded ||
-      !stripeConfigured ||
-      deferredCheckout ||
-      freeEventRegistration ||
-      hasInvalidVariant ||
-      clientSecret ||
-      loading ||
-      error ||
-      autoCheckoutStarted.current
-    ) {
-      return;
-    }
-    if (lines.length === 0 || lines.some(({ item }) => !item)) return;
-    if (lines.some(({ cartItem, item }) => item && missingAnswerMessage(item, cartItem.quantity))) {
-      return;
-    }
-    // Wait for the buyer to stop editing answers before starting a checkout.
-    // The real card form needs the names as typed, and starting on the first
-    // keystroke would snapshot a half-written participant name. Marking the
-    // checkout as started only when the timer really fires also means a
-    // dependency change that cancels it can schedule the next attempt instead
-    // of leaving the summary stuck on "Valmistellaan maksutapoja…" forever.
-    const timer = window.setTimeout(() => {
-      autoCheckoutStarted.current = true;
-      void goToCheckout();
-    }, 500);
-    return () => window.clearTimeout(timer);
-  }, [
-    answers,
-    catalogLoaded,
-    deferredCheckout,
-    discount,
-    email,
-    clientSecret,
-    error,
-    freeEventRegistration,
-    hasInvalidVariant,
-    goToCheckout,
-    lines,
-    loading,
-    missingAnswerMessage,
-  ]);
-
-  const cardCheckoutReady =
-    catalogLoaded &&
-    lines.length > 0 &&
-    !lines.some(({ item }) => !item) &&
-    !lines.some(({ cartItem, item }) => item && missingAnswerMessage(item, cartItem.quantity));
 
   if (items.length === 0) {
     return (
@@ -764,10 +708,6 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
           >
             <PaymentForm loading={loading} onError={setError} onLoading={setLoading} />
           </CheckoutElementsProvider>
-        ) : !deferredCheckout && !freeEventRegistration && cardCheckoutReady && !error ? (
-          <div className="flex min-h-11 items-center justify-center gap-2 rounded-md bg-muted px-4 py-2 text-sm text-muted-foreground">
-            <LoadingPill /> Valmistellaan maksutapoja…
-          </div>
         ) : (
           <Button
             variant="cta"
