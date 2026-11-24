@@ -199,12 +199,28 @@ export default async function AdminOrdersPage({
                                   </span>
                                   {!participantCancelled &&
                                     (order.status === 'RECEIVED' || order.status === 'PAID') && (
-                                      <form action={cancelParticipant} className="relative z-10">
+                                      <form
+                                        action={cancelParticipant}
+                                        className="relative z-10 flex items-center gap-2"
+                                      >
                                         <input
                                           type="hidden"
                                           name="participantId"
                                           value={participant.id}
                                         />
+                                        {order.status === 'PAID' &&
+                                        order.totalCents > 0 &&
+                                        Boolean(order.stripeSessionId) && (
+                                          <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
+                                            <input
+                                              type="checkbox"
+                                              name="refund"
+                                              value="1"
+                                              className="size-3.5 accent-[hsl(244,51%,24%)]"
+                                            />
+                                            Palauta
+                                          </label>
+                                        )}
                                         <FormButton
                                           size="sm"
                                           variant="ghost"
@@ -242,6 +258,11 @@ export default async function AdminOrdersPage({
                       orderId={order.id}
                       label="Peru koko tilaus"
                       variant="secondary"
+                      refundable={
+                        order.status === 'PAID' &&
+                        order.totalCents > 0 &&
+                        Boolean(order.stripeSessionId)
+                      }
                       confirm={`Peruutetaanko koko tilaus #${order.id.slice(-8).toUpperCase()}?`}
                     />
                   )}
@@ -259,16 +280,29 @@ function StatusButton({
   orderId,
   label,
   variant = 'outline',
+  refundable = false,
   confirm,
 }: {
   orderId: string;
   label: string;
   variant?: 'outline' | 'ghost' | 'secondary';
+  refundable?: boolean;
   confirm?: string;
 }) {
   return (
-    <form action={cancelOrder}>
+    <form action={cancelOrder} className="flex flex-wrap items-center gap-2">
       <input type="hidden" name="id" value={orderId} />
+      {refundable && (
+        <label className="flex items-center gap-1 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            name="refund"
+            value="1"
+            className="size-3.5 accent-[hsl(244,51%,24%)]"
+          />
+          Palauta maksu
+        </label>
+      )}
       <FormButton size="sm" variant={variant} confirm={confirm}>
         {label}
       </FormButton>

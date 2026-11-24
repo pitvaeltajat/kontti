@@ -334,13 +334,14 @@ export function EventPayment({
           {paid && (
             <p className="text-center text-sm text-muted-foreground">
               Maksu on vastaanotettu ja ilmoittautuminen vahvistettu. Voit perua ilmoittautumisen
-              IlmoDL-päivään asti.
+              Ilmoittautumisajan loppuun asti. Maksun palautus käsitellään ylläpidossa.
             </p>
           )}
           {!cancelled && canCancel && (
             <section className="space-y-3 border-t pt-4">
               <p className="text-sm text-muted-foreground">
                 Ilmoittautumisen voi perua {registrationDeadline ?? 'IlmoDL-päivään'} mennessä.
+                Maksun palautus käsitellään ylläpidossa.
               </p>
               <Button
                 type="button"

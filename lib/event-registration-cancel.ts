@@ -79,8 +79,8 @@ function assertCancellable(participant: ParticipantForCancel, orderId?: string) 
 /**
  * Removes one participant from an event order, reducing the line quantity and
  * order total. With `refund` and a paid Stripe checkout, refunds that
- * participant's share first. Used by the admin (manual refunds) and the
- * event-payment link (automatic refund).
+ * participant's share first. Callers decide the refund: the admin chooses it
+ * explicitly, and customer-initiated cancellations never refund automatically.
  */
 export async function cancelParticipantRegistration(
   participantId: string,

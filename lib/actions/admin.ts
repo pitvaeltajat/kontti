@@ -13,6 +13,7 @@ import { LEADER_DISCOUNT_CODE, normalizeCode } from '@/lib/discount';
 import { isSystemCategorySlug } from '@/lib/categories';
 import { DEFAULT_EVENT_ACCOUNTING_CLASS_NAME } from '@/lib/accounting';
 import { defaultRegistrationDeadline } from '@/lib/event-registration';
+import { getStripe } from '@/lib/stripe';
 import { cancelParticipantRegistration } from '@/lib/event-registration-cancel';
 
 export type ActionResult = { error?: string };
@@ -575,6 +576,39 @@ export async function cancelOrder(formData: FormData): Promise<void> {
   const id = ((formData.get('id') as string) ?? '').trim();
   if (!id) return;
 
+  const order = await prisma.order.findUnique({
+    where: { id },
+    select: { status: true, totalCents: true, stripeSessionId: true },
+  });
+  if (!order || order.status === 'CANCELLED') return;
+
+  const refund = formData.get('refund') === '1';
+  if (refund && ['PAID', 'COMPLETED'].includes(order.status) && order.totalCents > 0) {
+    if (!order.stripeSessionId) {
+      redirect(
+        `/admin?error=${encodeURIComponent('Maksun palautus pitää käsitellä ylläpidossa.')}`,
+      );
+    }
+    try {
+      const session = await getStripe().checkout.sessions.retrieve(order.stripeSessionId, {
+        expand: ['payment_intent'],
+      });
+      const paymentIntent = session.payment_intent;
+      const paymentIntentId =
+        typeof paymentIntent === 'string' ? paymentIntent : (paymentIntent?.id ?? null);
+      if (!paymentIntentId) throw new Error('Maksun tunnistetta ei löytynyt.');
+      await getStripe().refunds.create(
+        { payment_intent: paymentIntentId, amount: order.totalCents },
+        { idempotencyKey: `event-registration-refund:${id}:full` },
+      );
+    } catch (error) {
+      console.error('Tilauksen maksun palautus epäonnistui:', error);
+      redirect(
+        `/admin?error=${encodeURIComponent('Maksua ei voitu palauttaa. Yritä uudelleen tai käsittele palautus Stripen kautta.')}`,
+      );
+    }
+  }
+
   await prisma.order.update({
     where: { id },
     data: { status: 'CANCELLED' },
@@ -587,7 +621,9 @@ export async function cancelParticipant(formData: FormData): Promise<void> {
   const participantId = ((formData.get('participantId') as string) ?? '').trim();
   if (!participantId) return;
 
-  const result = await cancelParticipantRegistration(participantId, { refund: false });
+  const result = await cancelParticipantRegistration(participantId, {
+    refund: formData.get('refund') === '1',
+  });
   if (!result.ok) {
     redirect(`/admin?error=${encodeURIComponent(result.error)}`);
   }

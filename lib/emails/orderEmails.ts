@@ -168,7 +168,7 @@ export async function sendEventCancellationEmail(
         ? `Osallistujan ${escapeHtml(participantName)} ilmoittautuminen ${orderNumber(data.id)} on peruttu.`
         : `Ilmoittautuminen ${orderNumber(data.id)} on peruttu.`
     }</p>
-    <p>Jos ilmoittautuminen oli maksettu, maksu palautetaan automaattisesti.</p>
+    <p>Jos ilmoittautuminen oli maksettu, maksun palautuksesta voi sopia ylläpidon kanssa.</p>
     ${data.lines.length > 0 ? renderLinesTable(data) : ''}
     ${renderButton(publicUrl(), 'Avaa PitVa-kontti')}
   `);
