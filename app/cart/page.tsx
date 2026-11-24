@@ -9,7 +9,10 @@ export default async function CartPage() {
 
   return (
     <div className="container py-6 sm:py-8">
-      <h1 className="mb-6 text-2xl font-bold">Ostoskori</h1>
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold">Ostoskori</h1>
+        <p className="mt-1 text-sm text-muted-foreground">* - pakollinen</p>
+      </div>
       <CartShell
         initialUser={{
           name: session?.user?.name ?? '',

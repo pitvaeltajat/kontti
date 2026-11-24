@@ -457,12 +457,20 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
                     )}
                     {item.questions.map((question) => {
                       const current = answers[item.id]?.[question.id]?.[participantIndex];
+                      // Choice questions are always required server-side, even
+                      // when the item form's "required" flag is off.
+                      const required =
+                        question.required ||
+                        question.type === 'RADIO' ||
+                        question.type === 'CHECKBOX';
 
                       return (
                         <div key={question.id} className="space-y-2">
                           <Label className="text-xs font-medium">
                             {question.prompt}
-                            {!question.required && (
+                            {required ? (
+                              <span className="ml-1">*</span>
+                            ) : (
                               <span className="ml-1 font-normal text-muted-foreground">
                                 (valinnainen)
                               </span>
