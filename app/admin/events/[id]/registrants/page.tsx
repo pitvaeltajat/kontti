@@ -90,8 +90,8 @@ export default async function EventRegistrationsPage({
       </Link>
       <h1 className="text-2xl font-bold">{event.name}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
-        {formatEventDates(event.startsAt, event.endsAt)} · {orders.length} ilmoittautumista
-        {spots !== orders.length && ` · ${spots} paikkaa`}
+        {formatEventDates(event.startsAt, event.endsAt)} · {spots}{' '}
+        {spots === 1 ? 'paikka' : 'paikkaa'}
       </p>
 
       {rows.length === 0 ? (
@@ -110,7 +110,6 @@ export default async function EventRegistrationsPage({
                 <tr className="border-b text-xs uppercase text-muted-foreground">
                   <th className="px-4 py-3">Nimi</th>
                   <th className="px-4 py-3">Sähköposti</th>
-                  <th className="px-4 py-3 text-right">Paikka</th>
                   <th className="px-4 py-3">Lisätiedot</th>
                   <th className="px-4 py-3">Ilmoittautui</th>
                   <th className="px-4 py-3">Tila</th>
@@ -126,7 +125,6 @@ export default async function EventRegistrationsPage({
                     <td className="px-4 py-3 text-muted-foreground">
                       {row.email ?? 'ei sähköpostia'}
                     </td>
-                    <td className="px-4 py-3 text-right">1</td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {row.answers.length === 0
                         ? 'ei vastauksia'
