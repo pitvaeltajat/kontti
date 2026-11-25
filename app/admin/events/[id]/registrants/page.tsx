@@ -5,6 +5,7 @@ import { ChevronLeft } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { formatEventDates } from '@/lib/catalog';
 import { requireEventAdmin } from '@/lib/admin-guard';
+import { isSuperAdmin } from '@/lib/admin';
 import {
   DIETARY_REQUIREMENTS_QUESTION,
   PARTICIPANT_NAME_QUESTION,
@@ -13,10 +14,10 @@ import {
 } from '@/lib/questions';
 import { slugify } from '@/lib/slug';
 import { RegistrantEmails } from '@/components/admin/registrant-emails';
-import {
-  RegistrantsTable,
-  type RegistrantColumn,
-  type RegistrantRow,
+import { RegistrantsTableWithActions } from '@/components/admin/registrants-table-actions';
+import type {
+  RegistrantColumn,
+  RegistrantRow,
 } from '@/components/admin/registrants-table';
 
 export const metadata: Metadata = { title: 'Ilmoittautuneet' };
@@ -26,7 +27,7 @@ export default async function EventRegistrationsPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireEventAdmin();
+  const role = await requireEventAdmin();
   const { id } = await params;
 
   const event = await prisma.item.findUnique({ where: { id } });
@@ -38,7 +39,7 @@ export default async function EventRegistrationsPage({
         lines: { some: { itemId: id } },
         OR: [
           { status: { in: ['PAID', 'COMPLETED'] } },
-          { status: 'RECEIVED', stripeInvoiceId: { not: null } },
+          { status: 'RECEIVED' },
           {
             status: 'CANCELLED',
             OR: [{ paidAt: { not: null } }, { stripeInvoiceId: { not: null } }],
@@ -51,13 +52,17 @@ export default async function EventRegistrationsPage({
         email: true,
         status: true,
         createdAt: true,
+        paidAt: true,
+        stripeSessionId: true,
+        totalCents: true,
         lines: {
           where: { itemId: id },
           select: {
             quantity: true,
+            priceCents: true,
             answers: true,
             participants: {
-              select: { id: true, name: true, answers: true, cancelledAt: true },
+              select: { id: true, name: true, answers: true, cancelledAt: true, refundedAt: true },
               orderBy: { createdAt: 'asc' },
             },
           },
@@ -77,21 +82,39 @@ export default async function EventRegistrationsPage({
       const list =
         line.participants.length > 0
           ? line.participants.map((participant) => ({
+              participantId: participant.id,
               name: participant.name,
               answers: (participant.answers as AnswerSnapshot[] | null) ?? [],
               cancelledAt: participant.cancelledAt,
+              refundedAt: participant.refundedAt,
+              priceCents: line.priceCents,
             }))
           : splitParticipantAnswers(line.quantity, (line.answers as AnswerSnapshot[] | null) ?? []).map(
-              (participant) => ({ ...participant, cancelledAt: null }),
+              (participant) => ({
+                participantId: null,
+                ...participant,
+                cancelledAt: null,
+                refundedAt: null,
+                priceCents: line.quantity > 0 ? line.priceCents / line.quantity : line.priceCents,
+              }),
             );
       return list.map((participant, participantIndex) => ({
         id: `${order.id}-${lineIndex}-${participantIndex}`,
+        participantId: participant.participantId,
+        orderId: order.id,
         name: participant.name,
         answers: participant.answers,
         email: order.email,
         status:
           participant.cancelledAt || order.status === 'CANCELLED' ? 'CANCELLED' : order.status,
         createdAt: order.createdAt.toISOString(),
+        orderPaidAt: order.paidAt ? order.paidAt.toISOString() : null,
+        orderStripeSessionId: order.stripeSessionId,
+        orderTotalCents: order.totalCents,
+        participantCancelled: participant.cancelledAt !== null || order.status === 'CANCELLED',
+        participantPriceCents: participant.priceCents,
+        cancelledAt: participant.cancelledAt,
+        refundedAt: participant.refundedAt,
       }));
     }),
   );
@@ -140,6 +163,8 @@ export default async function EventRegistrationsPage({
     }
     return {
       id: participant.id,
+      participantId: participant.participantId,
+      orderId: participant.orderId,
       name: participant.name,
       email: participant.email,
       createdAt: participant.createdAt,
@@ -147,6 +172,17 @@ export default async function EventRegistrationsPage({
       answers: Object.fromEntries(
         answerColumns.map((column) => [column.key, answers.get(column.key) ?? '']),
       ),
+      orderPaidAt: participant.orderPaidAt,
+      orderStripeSessionId: participant.orderStripeSessionId,
+      orderTotalCents: participant.orderTotalCents,
+      participantCancelled: participant.participantCancelled,
+      participantCancelledAt: participant.cancelledAt
+        ? participant.cancelledAt.toISOString()
+        : null,
+      participantPriceCents: participant.participantPriceCents,
+      participantRefundedAt: participant.refundedAt
+        ? participant.refundedAt.toISOString()
+        : null,
     };
   });
 
@@ -160,6 +196,7 @@ export default async function EventRegistrationsPage({
     })),
     { key: 'createdAt', label: 'Ilmoittautui', kind: 'date' },
     { key: 'status', label: 'Tila', kind: 'status' },
+    { key: 'actions', label: 'Toimet', kind: 'actions' as const },
   ];
 
   const spots = rows.filter((row) => row.status !== 'CANCELLED').length;
@@ -176,7 +213,7 @@ export default async function EventRegistrationsPage({
       <h1 className="text-2xl font-bold">{event.name}</h1>
       <p className="mt-1 text-sm text-muted-foreground">
         {formatEventDates(event.startsAt, event.endsAt)} · {spots}{' '}
-        {spots === 1 ? 'paikka' : 'paikkaa'}
+        {spots === 1 ? 'ilmoittautunut' : 'ilmoittautunutta'}
       </p>
 
       {rows.length === 0 ? (
@@ -189,10 +226,11 @@ export default async function EventRegistrationsPage({
             <RegistrantEmails emails={emails} subject={event.name} />
           </div>
           <div className="mt-6">
-            <RegistrantsTable
+            <RegistrantsTableWithActions
               rows={rows}
               columns={columns}
               fileName={`${slugify(event.name)}-ilmoittautuneet`}
+              canManage={isSuperAdmin(role)}
             />
           </div>
         </>

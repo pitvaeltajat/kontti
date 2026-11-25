@@ -149,7 +149,6 @@ export default async function ItemPage({ params }: { params: Promise<{ slug: str
               itemId={item.id}
               variants={item.variants}
               withQuantity
-              isEvent={item.isEvent}
               disabled={soldOut}
             />
           </div>

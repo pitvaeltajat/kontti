@@ -39,8 +39,8 @@ export function SiteBanner({
           </h1>
           <p className="mt-2 max-w-xl text-sm text-foreground/75 md:text-base">
             Partiolippukunta Pitkäjärven Vaeltajien nettikauppa ja ilmoittautumisportaali. Täältä
-            voit ostaa huiveja, merkkejä ja PitVa-tuotteita sekä ilmoittautua tapahtumiin.
-            Tuotteet saat kokouksessa ryhmänjohtajaltasi tai noutamalla ne sovitusti kololta.
+            voit ostaa huiveja, merkkejä ja PitVa-tuotteita sekä ilmoittautua tapahtumiin. Tuotteet
+            saat kokouksessa ryhmänjohtajaltasi tai noutamalla ne sovitusti kololta.
           </p>
         </div>
 
@@ -49,7 +49,7 @@ export function SiteBanner({
           <ContactField label="Web-sivusto">
             <BannerLink href={WEBSITE_URL}>{WEBSITE_LABEL}</BannerLink>
           </ContactField>
-          <ContactField label="Yhteissähköposti">
+          <ContactField label="Ota yhteyttä">
             <BannerLink href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</BannerLink>
           </ContactField>
         </dl>

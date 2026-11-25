@@ -208,6 +208,7 @@ model Order {
   invoicePdfUrl       String?
   invoiceDueAt        DateTime?
   paidAt              DateTime?
+  refundedAt          DateTime?
   lines               OrderLine[]
 
   @@index([status, createdAt])
@@ -243,6 +244,7 @@ model Participant {
   answers     Json?
   createdAt   DateTime  @default(now())
   cancelledAt DateTime?
+  refundedAt  DateTime?
 
   @@index([orderLineId])
 }

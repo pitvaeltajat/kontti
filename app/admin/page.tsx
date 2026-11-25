@@ -4,10 +4,11 @@ import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
 import { prisma } from '@/lib/prisma';
 import { formatCents } from '@/lib/money';
-import { cancelOrder, cancelParticipant } from '@/lib/actions/admin';
 import { requireSuperAdmin } from '@/lib/admin-guard';
 import { Badge } from '@/components/ui/badge';
-import { FormButton } from '@/components/admin/form-button';
+import { Button } from '@/components/ui/button';
+import { ConfirmDialog } from '@/components/admin/refund-dialog';
+import { RefundOrderForm } from '@/components/admin/order-actions';
 
 export const metadata: Metadata = { title: 'Tilaukset' };
 
@@ -35,14 +36,25 @@ export default async function AdminOrdersPage({
 
   const orders = await prisma.order.findMany({
     where: filter ? { status: filter } : undefined,
-    include: {
+    select: {
+      id: true,
+      status: true,
+      createdAt: true,
+      name: true,
+      email: true,
+      totalCents: true,
+      paidAt: true,
+      refundedAt: true,
+      stripeSessionId: true,
       lines: {
-        include: {
+        select: {
+          id: true,
+          name: true,
+          quantity: true,
+          priceCents: true,
+          answers: true,
           item: { select: { id: true, name: true, isEvent: true } },
-          participants: {
-            select: { id: true, name: true, cancelledAt: true },
-            orderBy: { createdAt: 'asc' },
-          },
+          participants: { select: { refundedAt: true } },
         },
       },
     },
@@ -109,6 +121,14 @@ export default async function AdminOrdersPage({
             // handing over is no longer a separate order status.
             const displayStatus = order.status === 'COMPLETED' ? 'PAID' : order.status;
             const eventLine = order.lines.find((line) => line.item.isEvent);
+            const refundedAt =
+              order.refundedAt ??
+              order.lines
+                .flatMap((line) => line.participants)
+                .map((p) => p.refundedAt)
+                .filter((d): d is Date => d !== null)
+                .sort((a, b) => b.getTime() - a.getTime())[0] ??
+              null;
             return (
               <div
                 key={order.id}
@@ -139,11 +159,16 @@ export default async function AdminOrdersPage({
                     <Badge variant={STATUS_META[displayStatus].variant}>
                       {STATUS_META[displayStatus].label}
                     </Badge>
+                    {refundedAt && (
+                      <Badge variant="secondary">
+                        Hyvitetty {format(refundedAt, 'd.M.yyyy')}
+                      </Badge>
+                    )}
                     <span className="font-bold">{formatCents(order.totalCents)}</span>
                   </div>
                 </div>
 
-                <ul className="mt-3 divide-y rounded-md bg-background px-3 text-sm">
+                <ul className="mt-3 space-y-1 rounded-md bg-background p-3 text-sm">
                   {order.lines.map((line) => {
                     const answers = Array.isArray(line.answers)
                       ? (line.answers as {
@@ -153,7 +178,7 @@ export default async function AdminOrdersPage({
                         }[])
                       : [];
                     return (
-                      <li key={line.id} className="space-y-1 py-2 first:pt-3 last:pb-3">
+                      <li key={line.id} className="space-y-1">
                         <div className="flex justify-between gap-3">
                           <span>
                             <Link
@@ -168,73 +193,11 @@ export default async function AdminOrdersPage({
                             </Link>
                           </span>
                           <span className="shrink-0 text-muted-foreground">
-                            {line.quantity === 0
-                              ? `0 × ${formatCents(line.priceCents)}`
-                              : line.quantity > 1
-                                ? `${line.quantity} × ${formatCents(line.priceCents)}`
-                                : formatCents(line.priceCents)}
+                            {line.quantity > 1
+                              ? `${line.quantity} × ${formatCents(line.priceCents)}`
+                              : formatCents(line.priceCents)}
                           </span>
                         </div>
-                        {line.participants.length > 0 && (
-                          <ul className="ml-4 divide-y text-xs">
-                            {line.participants.map((participant) => {
-                              const participantCancelled =
-                                Boolean(participant.cancelledAt) || order.status === 'CANCELLED';
-                              return (
-                                <li
-                                  key={participant.id}
-                                  className="flex flex-wrap items-center justify-between gap-2 py-1 first:pt-0 last:pb-0"
-                                >
-                                  <span
-                                    className={
-                                      participantCancelled
-                                        ? 'text-muted-foreground line-through'
-                                        : 'text-muted-foreground'
-                                    }
-                                  >
-                                    {participant.name}
-                                    {participantCancelled && (
-                                      <span className="ml-1 no-underline">(peruttu)</span>
-                                    )}
-                                  </span>
-                                  {!participantCancelled &&
-                                    (order.status === 'RECEIVED' || order.status === 'PAID') && (
-                                      <form
-                                        action={cancelParticipant}
-                                        className="relative z-10 flex items-center gap-2"
-                                      >
-                                        <input
-                                          type="hidden"
-                                          name="participantId"
-                                          value={participant.id}
-                                        />
-                                        {order.status === 'PAID' &&
-                                        order.totalCents > 0 &&
-                                        Boolean(order.stripeSessionId) && (
-                                          <label className="flex items-center gap-1 text-[11px] text-muted-foreground">
-                                            <input
-                                              type="checkbox"
-                                              name="refund"
-                                              value="1"
-                                              className="size-3.5 accent-[hsl(244,51%,24%)]"
-                                            />
-                                            Palauta
-                                          </label>
-                                        )}
-                                        <FormButton
-                                          size="sm"
-                                          variant="ghost"
-                                          confirm={`Perutaanko ${participant.name}?`}
-                                        >
-                                          Peru tilaus
-                                        </FormButton>
-                                      </form>
-                                    )}
-                                </li>
-                              );
-                            })}
-                          </ul>
-                        )}
                         {answers.length > 0 && (
                           <ul className="ml-4 space-y-0.5 text-xs text-muted-foreground">
                             {answers.map((answer) => (
@@ -252,20 +215,35 @@ export default async function AdminOrdersPage({
                   })}
                 </ul>
 
-                <div className="relative z-10 mt-3 flex flex-wrap gap-2 border-t pt-3">
-                  {(order.status === 'RECEIVED' || order.status === 'PAID') && (
-                    <StatusButton
-                      orderId={order.id}
-                      label="Peru koko tilaus"
-                      variant="secondary"
-                      refundable={
-                        order.status === 'PAID' &&
-                        order.totalCents > 0 &&
-                        Boolean(order.stripeSessionId)
-                      }
-                      confirm={`Peruutetaanko koko tilaus #${order.id.slice(-8).toUpperCase()}?`}
-                    />
-                  )}
+                <div className="relative z-10 mt-3 flex flex-wrap gap-2">
+                  {order.status === 'CANCELLED' &&
+                    order.paidAt &&
+                    order.stripeSessionId &&
+                    order.totalCents > 0 &&
+                    (order.refundedAt ? (
+                      <Button variant="ghost" size="sm" disabled>
+                        Palauta maksu
+                      </Button>
+                    ) : (
+                      <ConfirmDialog
+                        triggerLabel="Palauta maksu"
+                        triggerVariant="ghost"
+                        triggerSize="sm"
+                        title="Palauta maksu"
+                        description={
+                          <>
+                            Palautettava summa {formatCents(order.totalCents)}. Haluatko varmasti
+                            palauttaa maksun? Summa palautetaan asiakkaan maksukortille.
+                          </>
+                        }
+                      >
+                        <RefundOrderForm
+                          orderId={order.id}
+                          statusParam={statusParam}
+                          amountCents={order.totalCents}
+                        />
+                      </ConfirmDialog>
+                    ))}
                 </div>
               </div>
             );
@@ -273,39 +251,5 @@ export default async function AdminOrdersPage({
         </div>
       )}
     </div>
-  );
-}
-
-function StatusButton({
-  orderId,
-  label,
-  variant = 'outline',
-  refundable = false,
-  confirm,
-}: {
-  orderId: string;
-  label: string;
-  variant?: 'outline' | 'ghost' | 'secondary';
-  refundable?: boolean;
-  confirm?: string;
-}) {
-  return (
-    <form action={cancelOrder} className="flex flex-wrap items-center gap-2">
-      <input type="hidden" name="id" value={orderId} />
-      {refundable && (
-        <label className="flex items-center gap-1 text-xs text-muted-foreground">
-          <input
-            type="checkbox"
-            name="refund"
-            value="1"
-            className="size-3.5 accent-[hsl(244,51%,24%)]"
-          />
-          Palauta maksu
-        </label>
-      )}
-      <FormButton size="sm" variant={variant} confirm={confirm}>
-        {label}
-      </FormButton>
-    </form>
   );
 }

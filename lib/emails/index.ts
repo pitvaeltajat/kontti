@@ -7,6 +7,8 @@
 export {
   renderOrderReceiptEmail,
   sendOrderReceiptEmail,
+  renderOrderCancellationEmail,
+  sendOrderCancellationEmail,
   sendEventCancellationEmail,
   renderNewOrderAdminEmail,
   sendNewOrderAdminEmail,

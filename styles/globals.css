@@ -149,7 +149,7 @@
        Shared by both themes - `.dark` doesn't override it. */
     --cta-hover: 219 85% 80%;
 
-    /* Brand gray. The quieter button beside a --cta one (a dialog's "Peruuta")
+    /* Brand gray. The quieter button beside a --cta one (a dialog's "Peru")
        and the neutral chip. It was the light blue until the filled button took
        that over - two light-blue buttons side by side in a dialog read as two
        confirms. */
@@ -365,6 +365,10 @@
   select {
     font-size: 16px;
   }
+}
+
+.react-datepicker-wrapper {
+  display: block;
 }
 
 /* react-datepicker sizes its day cells in fixed rem (1.7rem ≈ 27px), which on a

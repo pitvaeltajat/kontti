@@ -105,6 +105,28 @@ export function renderNewOrderAdminEmail(data: OrderEmailData): EmailContent {
   return { subject: `Uusi tilaus ${orderNumber(data.id)}`, html };
 }
 
+/** Cancellation notice the buyer gets when an order or registration is cancelled. */
+export function renderOrderCancellationEmail(data: OrderEmailData): EmailContent {
+  const greeting = data.name ? `Hei ${escapeHtml(data.name)}!` : 'Hei!';
+  const isEvent = data.lines.some(
+    (line) => line.eventDates !== undefined || (line.participants?.length ?? 0) > 0,
+  );
+  const html = renderEmail(`
+    <h1>${isEvent ? 'Ilmoittautumisesi on peruttu' : 'Tilauksesi on peruttu'}</h1>
+    <p>${greeting}</p>
+    <p>${isEvent ? `Ilmoittautumisesi <strong>${orderNumber(data.id)}</strong> on peruttu.` : `Tilauksesi <strong>${orderNumber(data.id)}</strong> on peruttu.`}</p>
+    ${renderLinesTable(data)}
+    <div class="info-box">
+      Maksun palautuksesta voit sopia ylläpidon kanssa.
+    </div>
+    ${renderButton(publicUrl(), 'Takaisin Konttiin')}
+  `);
+  return {
+    subject: isEvent ? 'Ilmoittautumisesi on peruttu' : 'Tilauksesi on peruttu',
+    html,
+  };
+}
+
 async function loadOrderEmailData(orderId: string): Promise<OrderEmailData | null> {
   const order = await prisma.order.findUnique({
     where: { id: orderId },
@@ -151,6 +173,14 @@ export async function sendOrderReceiptEmail(orderId: string): Promise<void> {
   const data = await loadOrderEmailData(orderId);
   if (!data?.email) return;
   const { subject, html } = renderOrderReceiptEmail(data);
+  await sendEmail(data.email, subject, html);
+}
+
+/** Send the buyer a cancellation notice. No-op if the order has no email. */
+export async function sendOrderCancellationEmail(orderId: string): Promise<void> {
+  const data = await loadOrderEmailData(orderId);
+  if (!data?.email) return;
+  const { subject, html } = renderOrderCancellationEmail(data);
   await sendEmail(data.email, subject, html);
 }
 

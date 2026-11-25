@@ -115,6 +115,7 @@ export async function POST(req: Request) {
         const session = await getStripe().checkout.sessions.retrieve(existing.stripeSessionId);
         return NextResponse.json({
           paymentMethod: 'elements',
+          orderId: existing.id,
           clientSecret: session.client_secret,
           checkoutSessionId: session.id,
         });
@@ -427,6 +428,7 @@ export async function POST(req: Request) {
     });
     return NextResponse.json({
       paymentMethod: 'elements',
+      orderId: order.id,
       clientSecret: session.client_secret,
       checkoutSessionId: session.id,
     });

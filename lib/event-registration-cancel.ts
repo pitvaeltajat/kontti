@@ -20,6 +20,7 @@ const participantSelect = {
   id: true,
   name: true,
   cancelledAt: true,
+  refundedAt: true,
   orderLine: {
     select: {
       id: true,
@@ -44,6 +45,7 @@ type ParticipantForCancel = {
   id: string;
   name: string;
   cancelledAt: Date | null;
+  refundedAt: Date | null;
   orderLine: {
     id: string;
     quantity: number;
@@ -146,7 +148,10 @@ export async function cancelParticipantRegistration(
       const line = current.orderLine;
       const cancelled = await tx.participant.updateMany({
         where: { id: current.id, orderLineId: line.id, cancelledAt: null },
-        data: { cancelledAt: new Date() },
+        data: {
+          cancelledAt: new Date(),
+          ...(refundedCents > 0 ? { refundedAt: new Date() } : {}),
+        },
       });
       if (cancelled.count !== 1) throw new CancelError('Ilmoittautuminen on jo peruttu.', 400);
 
@@ -210,4 +215,119 @@ export async function cancelParticipantRegistration(
     console.error('Ilmoittautumisen peruminen epäonnistui:', error);
     return { ok: false, error: 'Ilmoittautumisen peruminen epäonnistui.', status: 500 };
   }
+}
+
+export type RefundPaymentResult =
+  | { ok: true; refundedCents: number }
+  | { ok: false; error: string; status: number };
+
+async function refundStripePayment(
+  stripeSessionId: string | null,
+  amount: number,
+  idempotencyKey: string,
+): Promise<RefundPaymentResult> {
+  if (!stripeSessionId) {
+    return { ok: false, error: 'Maksun palautus pitää käsitellä ylläpidossa.', status: 400 };
+  }
+  try {
+    const session = await getStripe().checkout.sessions.retrieve(stripeSessionId, {
+      expand: ['payment_intent'],
+    });
+    const paymentIntent = session.payment_intent;
+    const paymentIntentId =
+      typeof paymentIntent === 'string' ? paymentIntent : (paymentIntent?.id ?? null);
+    if (!paymentIntentId) throw new Error('Maksun tunnistetta ei löytynyt.');
+    await getStripe().refunds.create(
+      { payment_intent: paymentIntentId, amount },
+      { idempotencyKey },
+    );
+    return { ok: true, refundedCents: amount };
+  } catch (error) {
+    console.error('Maksun palautus epäonnistui:', error);
+    return {
+      ok: false,
+      error: 'Maksua ei voitu palauttaa. Yritä uudelleen tai käsittele palautus Stripen kautta.',
+      status: 502,
+    };
+  }
+}
+
+/** Refunds one cancelled participant's share; does not change the order. */
+export async function refundParticipantPayment(
+  participantId: string,
+): Promise<RefundPaymentResult> {
+  const participant = await prisma.participant.findUnique({
+    where: { id: participantId },
+    select: {
+      cancelledAt: true,
+      refundedAt: true,
+      orderLine: {
+        select: {
+          priceCents: true,
+          order: {
+            select: {
+              id: true,
+              totalCents: true,
+              paidAt: true,
+              stripeSessionId: true,
+              refundedAt: true,
+            },
+          },
+        },
+      },
+    },
+  });
+  if (!participant) return { ok: false, error: 'Ilmoittautumista ei löydy.', status: 404 };
+  if (!participant.cancelledAt) {
+    return { ok: false, error: 'Ilmoittautumista ei ole peruttu.', status: 400 };
+  }
+  if (participant.refundedAt) {
+    return { ok: false, error: 'Maksu on jo palautettu.', status: 400 };
+  }
+  const order = participant.orderLine.order;
+  if (order.refundedAt) {
+    return { ok: false, error: 'Maksu on jo palautettu.', status: 400 };
+  }
+  if (!order.paidAt || participant.orderLine.priceCents <= 0) {
+    return { ok: false, error: 'Tilauksella ei ole palautettavaa maksua.', status: 400 };
+  }
+  const result = await refundStripePayment(
+    order.stripeSessionId,
+    participant.orderLine.priceCents,
+    `event-registration-refund:${order.id}:${participantId}`,
+  );
+  if (!result.ok) return result;
+
+  try {
+    await prisma.participant.update({
+      where: { id: participantId },
+      data: { refundedAt: new Date() },
+    });
+  } catch (error) {
+    console.error('Palautuksen kirjaaminen epäonnistui:', error);
+    return {
+      ok: false,
+      error: 'Maksu palautettiin, mutta kirjausta ei voitu tallentaa. Tarkista ilmoittautuminen.',
+      status: 500,
+    };
+  }
+
+  return result;
+}
+
+/** Refunds the remaining total of a cancelled order; does not change its status. */
+export async function refundOrderPayment(orderId: string): Promise<RefundPaymentResult> {
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: { id: true, totalCents: true, paidAt: true, stripeSessionId: true },
+  });
+  if (!order) return { ok: false, error: 'Tilausta ei löydy.', status: 404 };
+  if (!order.paidAt || order.totalCents <= 0) {
+    return { ok: false, error: 'Tilauksella ei ole palautettavaa maksua.', status: 400 };
+  }
+  return refundStripePayment(
+    order.stripeSessionId,
+    order.totalCents,
+    `event-registration-refund:${order.id}:full`,
+  );
 }

@@ -265,7 +265,7 @@ export function EventPayment({
                   </p>
                 </div>
                 <Button type="button" variant="cta" className="w-full" onClick={share}>
-                  <Share2 className="size-4" /> Jaa maksuohje vanhemmalle
+                  <Share2 className="size-4" /> Jaa maksuohje
                 </Button>
                 <div className="grid gap-2">
                   <Button type="button" variant="outline" onClick={copyLink}>
@@ -273,14 +273,14 @@ export function EventPayment({
                   </Button>
                 </div>
                 <div className="space-y-2 border-t border-primary/15 pt-3">
-                  <Label htmlFor="parent-email">Tai lähetä maksuohje vanhemman sähköpostiin</Label>
+                  <Label htmlFor="parent-email">Tai lähetä maksuohje sähköpostiin</Label>
                   <div className="flex flex-col gap-2 sm:flex-row">
                     <Input
                       id="parent-email"
                       type="email"
                       value={parentEmail}
                       onChange={(e) => setParentEmail(e.target.value)}
-                      placeholder="vanhempi@example.com"
+                      placeholder="huoltaja@esimerkki.com"
                     />
                     <Button
                       type="button"
@@ -358,8 +358,7 @@ export function EventPayment({
           )}
           {!cancelled && !canCancel && (
             <p className="border-t pt-4 text-center text-sm text-muted-foreground">
-              IlmoDL on päättynyt. Ilmoittautumista ei voi enää perua tämän linkin kautta. Maksun
-              saa takaisin vain lääkärintodistusta vastaan.
+              Ilmoittautuminen on päättynyt. Ilmoittautumista ei voi enää perua tämän linkin kautta.
             </p>
           )}
           {cancelled && (
@@ -374,6 +373,7 @@ export function EventPayment({
 }
 
 function EventPaymentForm() {
+  const router = useRouter();
   const checkoutState = useCheckoutElements();
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -396,7 +396,14 @@ function EventPaymentForm() {
       if (result.type === 'error') {
         expressCheckoutConfirmEvent?.paymentFailed({ message: result.error.message });
         setError(result.error.message ?? 'Maksu epäonnistui.');
+        return;
       }
+      fetch('/api/checkout/confirm', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: result.session.id }),
+      }).catch(() => {});
+      router.refresh();
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Maksu epäonnistui.';
       expressCheckoutConfirmEvent?.paymentFailed({ message });
@@ -428,7 +435,7 @@ function EventPaymentForm() {
         onClick={() => void submit()}
         disabled={loading || checkoutState.type !== 'success'}
       >
-        {loading ? <LoadingPill className="bg-current/25" /> : 'Maksa turvallisesti'}
+        {loading ? <LoadingPill className="bg-current/25" /> : 'Maksa'}
       </Button>
     </div>
   );

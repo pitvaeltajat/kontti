@@ -13,10 +13,15 @@ import { LEADER_DISCOUNT_CODE, normalizeCode } from '@/lib/discount';
 import { isSystemCategorySlug } from '@/lib/categories';
 import { DEFAULT_EVENT_ACCOUNTING_CLASS_NAME } from '@/lib/accounting';
 import { defaultRegistrationDeadline } from '@/lib/event-registration';
-import { getStripe } from '@/lib/stripe';
-import { cancelParticipantRegistration } from '@/lib/event-registration-cancel';
+import {
+  cancelParticipantRegistration,
+  refundOrderPayment,
+  refundParticipantPayment,
+} from '@/lib/event-registration-cancel';
+import { sendOrderCancellationEmail } from '@/lib/emails/orderEmails';
+import { trySendEmail } from '@/lib/emails';
 
-export type ActionResult = { error?: string };
+export type ActionResult = { error?: string; ok?: boolean };
 
 /** Role of the signed-in person, or null when not signed in. */
 async function currentRole(): Promise<Role | null> {
@@ -571,61 +576,126 @@ export async function deleteDiscount(formData: FormData): Promise<void> {
 
 // --- Orders ---------------------------------------------------------------
 
-export async function cancelOrder(formData: FormData): Promise<void> {
-  if (!isSuperAdmin(await currentRole())) return;
+export async function cancelOrder(prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!isSuperAdmin(await currentRole())) {
+    return { error: 'Ei oikeuksia.' };
+  }
   const id = ((formData.get('id') as string) ?? '').trim();
-  if (!id) return;
+  if (!id) return { error: 'Tilausta ei löydy.' };
+
+  // Load order with lines and their items (for stock info)
+  const order = await prisma.order.findUnique({
+    where: { id },
+    include: { lines: { include: { item: { select: { stock: true } } } } },
+  });
+  if (!order) return { error: 'Tilausta ei löydy.' };
+  if (order.status === 'CANCELLED') return { error: 'Tilaus on jo peruttu.' };
+
+  const wasPaid = order.status === 'PAID' || order.status === 'COMPLETED';
+
+  // Transaction: cancel order + restore stock if was paid
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id },
+      data: { status: 'CANCELLED' },
+    });
+
+    if (wasPaid) {
+      for (const line of order.lines) {
+        if (line.item?.stock !== null && line.item?.stock !== undefined) {
+          await tx.item.update({
+            where: { id: line.itemId },
+            data: { stock: { increment: line.quantity } },
+          });
+        }
+      }
+    }
+  });
+
+  // Send cancellation email (fire-and-forget via trySendEmail)
+  trySendEmail('order cancellation', () => sendOrderCancellationEmail(id));
+
+  revalidatePath('/admin');
+  return { ok: true };
+}
+
+export async function refundOrder(prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  if (!isSuperAdmin(await currentRole())) {
+    return { error: 'Ei oikeuksia.' };
+  }
+  const id = ((formData.get('id') as string) ?? '').trim();
+  if (!id) return { error: 'Tilausta ei löydy.' };
 
   const order = await prisma.order.findUnique({
     where: { id },
-    select: { status: true, totalCents: true, stripeSessionId: true },
+    select: {
+      status: true,
+      paidAt: true,
+      totalCents: true,
+      stripeSessionId: true,
+      refundedAt: true,
+    },
   });
-  if (!order || order.status === 'CANCELLED') return;
+  if (!order) return { error: 'Tilausta ei löydy.' };
+  if (order.refundedAt) return { error: 'Maksu on jo palautettu.' };
+  if (order.status !== 'CANCELLED') return { error: 'Peruuta tilaus ennen maksun palautusta.' };
+  if (!order.paidAt) return { error: 'Tilausta ei ole maksettu.' };
+  if (order.totalCents <= 0) return { error: 'Ei palautettavaa.' };
+  if (!order.stripeSessionId) return { error: 'Maksun palautus pitää käsitellä ylläpidossa.' };
 
-  const refund = formData.get('refund') === '1';
-  if (refund && ['PAID', 'COMPLETED'].includes(order.status) && order.totalCents > 0) {
-    if (!order.stripeSessionId) {
-      redirect(
-        `/admin?error=${encodeURIComponent('Maksun palautus pitää käsitellä ylläpidossa.')}`,
-      );
-    }
-    try {
-      const session = await getStripe().checkout.sessions.retrieve(order.stripeSessionId, {
-        expand: ['payment_intent'],
-      });
-      const paymentIntent = session.payment_intent;
-      const paymentIntentId =
-        typeof paymentIntent === 'string' ? paymentIntent : (paymentIntent?.id ?? null);
-      if (!paymentIntentId) throw new Error('Maksun tunnistetta ei löytynyt.');
-      await getStripe().refunds.create(
-        { payment_intent: paymentIntentId, amount: order.totalCents },
-        { idempotencyKey: `event-registration-refund:${id}:full` },
-      );
-    } catch (error) {
-      console.error('Tilauksen maksun palautus epäonnistui:', error);
-      redirect(
-        `/admin?error=${encodeURIComponent('Maksua ei voitu palauttaa. Yritä uudelleen tai käsittele palautus Stripen kautta.')}`,
-      );
-    }
+  const result = await refundOrderPayment(id);
+  if (!result.ok) return { error: result.error ?? 'Palautus epäonnistui.' };
+
+  try {
+    await prisma.$transaction([
+      prisma.order.update({ where: { id }, data: { refundedAt: new Date() } }),
+      prisma.participant.updateMany({
+        where: { orderLine: { orderId: id } },
+        data: { refundedAt: new Date() },
+      }),
+    ]);
+  } catch (error) {
+    console.error('Palautuksen kirjaaminen epäonnistui:', error);
+    return { error: 'Maksu palautettiin, mutta kirjausta ei voitu tallentaa. Tarkista tilaus.' };
   }
 
-  await prisma.order.update({
-    where: { id },
-    data: { status: 'CANCELLED' },
-  });
   revalidatePath('/admin');
+  return { ok: true };
 }
 
-export async function cancelParticipant(formData: FormData): Promise<void> {
-  if (!isSuperAdmin(await currentRole())) return;
-  const participantId = ((formData.get('participantId') as string) ?? '').trim();
-  if (!participantId) return;
-
-  const result = await cancelParticipantRegistration(participantId, {
-    refund: formData.get('refund') === '1',
-  });
-  if (!result.ok) {
-    redirect(`/admin?error=${encodeURIComponent(result.error)}`);
+export async function cancelRegistrant(
+  prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  if (!isSuperAdmin(await currentRole())) {
+    return { error: 'Ei oikeuksia.' };
   }
+  const participantId = ((formData.get('participantId') as string) ?? '').trim();
+  const orderId = ((formData.get('orderId') as string) ?? '').trim();
+  if (!participantId || !orderId) return { error: 'Puuttuvat tiedot.' };
+
+  const result = await cancelParticipantRegistration(participantId, { refund: false, orderId });
+  if (!result.ok) return { error: result.error ?? 'Peruminen epäonnistui.' };
+
+  revalidatePath('/admin/events');
   revalidatePath('/admin');
+  return { ok: true };
+}
+
+export async function refundRegistrant(
+  prev: ActionResult,
+  formData: FormData,
+): Promise<ActionResult> {
+  if (!isSuperAdmin(await currentRole())) {
+    return { error: 'Ei oikeuksia.' };
+  }
+  const participantId = ((formData.get('participantId') as string) ?? '').trim();
+  if (!participantId) return { error: 'Puuttuvat tiedot.' };
+
+  const result = await refundParticipantPayment(participantId);
+  if (!result.ok) return { error: result.error ?? 'Palautus epäonnistui.' };
+
+  revalidatePath('/admin/events');
+  revalidatePath('/admin');
+  return { ok: true };
 }

@@ -390,7 +390,7 @@ export function ItemForm({
 
         {isEvent && (
           <div className="space-y-1.5">
-            <Label htmlFor="notificationEmails">Ilmoitusosoitteet</Label>
+            <Label htmlFor="notificationEmails">Sähköposti-ilmoitukset</Label>
             <div className="flex min-h-10 flex-wrap gap-2 rounded-md border border-input bg-card p-2">
               {selectedNotificationEmails.map((email) => {
                 const user = notificationUsers.find((candidate) => candidate.email === email);
@@ -496,8 +496,7 @@ export function ItemForm({
               </div>
             )}
             <p className="text-xs text-muted-foreground">
-              Valituille käyttäjille lähetetään viesti uudesta ilmoittautumisesta. Vain ylläpidon
-              käyttöön.
+              Valituille käyttäjille lähetetään viesti uudesta ilmoittautumisesta.
             </p>
           </div>
         )}

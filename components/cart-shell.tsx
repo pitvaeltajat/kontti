@@ -3,14 +3,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import type { StripeExpressCheckoutElementConfirmEvent } from '@stripe/stripe-js';
-import {
-  CheckoutElementsProvider,
-  ExpressCheckoutElement,
-  PaymentElement,
-  useCheckoutElements,
-} from '@stripe/react-stripe-js/checkout';
-import { loadStripe } from '@stripe/stripe-js';
 import { Minus, Plus, Trash2, ShoppingCart } from 'lucide-react';
 import { cartStore, useCart } from '@/lib/cart';
 import { formatCents } from '@/lib/money';
@@ -51,9 +43,7 @@ type FetchedItem = {
 type AnswerValue = string | string[];
 type Answers = Record<string, Record<string, AnswerValue[]>>;
 
-const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
-const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
-const stripeConfigured = stripePromise !== null;
+const stripeConfigured = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
 
 export function CartShell({ initialUser }: { initialUser: { name: string; email: string } }) {
   const router = useRouter();
@@ -68,7 +58,6 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
   const [discount, setDiscount] = useState<DiscountCodeLike | null>(null);
   const [codeError, setCodeError] = useState<string | null>(null);
   const [codeChecking, setCodeChecking] = useState(false);
-  const [clientSecret, setClientSecret] = useState<string | null>(null);
   const checkoutRequestKey = useRef<string | null>(null);
   const checkoutGeneration = useRef(0);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'deferred'>('card');
@@ -195,7 +184,6 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
   function choosePaymentMethod(next: 'card' | 'deferred') {
     if (next === paymentMethod) return;
     setPaymentMethod(next);
-    setClientSecret(null);
     setLoading(false);
     checkoutGeneration.current += 1;
     setError(null);
@@ -304,7 +292,7 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
         return;
       }
       if (data.paymentMethod === 'elements' && data.clientSecret) {
-        setClientSecret(data.clientSecret);
+        router.push(`/checkout?orderId=${encodeURIComponent(data.orderId ?? '')}`);
         return;
       }
       if (!data.clientSecret) {
@@ -667,10 +655,7 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
                 onChange={() => choosePaymentMethod('card')}
               />
               <span>
-                <span className="font-medium">Maksa itse</span>
-                <span className="block text-xs text-muted-foreground">
-                  Maksu tapahtuu heti turvallisella maksulomakkeella.
-                </span>
+                <span className="font-medium">Maksa nyt</span>
               </span>
             </label>
             <label className="flex cursor-pointer items-start gap-2 text-sm">
@@ -682,9 +667,9 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
                 onChange={() => choosePaymentMethod('deferred')}
               />
               <span>
-                <span className="font-medium">Vanhempi maksaa myöhemmin</span>
+                <span className="font-medium">Maksa myöhemmin</span>
                 <span className="block text-xs text-muted-foreground">
-                  Saat jaettavan maksuohjeen. Vanhempi voi maksaa turvallisesti omalla laitteellaan.
+                  Saat jaettavan maksulinkin.
                 </span>
               </span>
             </label>
@@ -700,21 +685,6 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
             Verkkomaksaminen ei ole juuri nyt käytössä. Ota yhteyttä ylläpitoon.
             {eventOnly && ' Voit myös valita vanhemman maksaman maksuohjeen.'}
           </p>
-        ) : clientSecret && stripePromise && !deferredCheckout ? (
-          <CheckoutElementsProvider
-            stripe={stripePromise}
-            options={{
-              clientSecret,
-              elementsOptions: {
-                appearance: {
-                  theme: 'stripe',
-                  variables: { colorPrimary: 'hsl(244, 51%, 24%)', borderRadius: '6px' },
-                },
-              },
-            }}
-          >
-            <PaymentForm loading={loading} onError={setError} onLoading={setLoading} />
-          </CheckoutElementsProvider>
         ) : (
           <Button
             variant="cta"
@@ -726,11 +696,11 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
             {loading ? (
               <LoadingPill className="bg-current/25" />
             ) : deferredCheckout ? (
-              'Ilmoittaudu ja pyydä vanhempaa maksamaan'
+              'Ilmoittaudu ja maksa myöhemmin'
             ) : freeEventRegistration ? (
               'Ilmoittaudu (maksuton)'
             ) : (
-              'Jatka maksamiseen'
+              'Siirry maksamaan'
             )}
           </Button>
         )}
@@ -738,84 +708,12 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
           {freeEventRegistration
             ? 'Tämä tapahtuma on maksuton. Ilmoittautuminen vahvistetaan heti.'
             : deferredCheckout
-              ? 'Ilmoittautuminen vahvistuu, kun vanhempi maksaa jaettavan maksuohjeen kautta.'
+              ? 'Ilmoittautuminen vahvistuu vasta kun tapahtuma on maksettu.'
               : eventOnly
                 ? 'Maksat tapahtuman verkossa. Tapahtumatuotteen ostaminen toimii samalla ilmoittautumisena. Saat kuitin sähköpostiisi.'
                 : 'Maksat tuotteen verkossa ja noudat sen kokouksessa ryhmänjohtajalta tai erikseen sovittuna aikana kololta. Saat kuitin sähköpostiisi.'}
         </p>
       </div>
-    </div>
-  );
-}
-
-function PaymentForm({
-  loading,
-  onError,
-  onLoading,
-}: {
-  loading: boolean;
-  onError: (message: string | null) => void;
-  onLoading: (loading: boolean) => void;
-}) {
-  const router = useRouter();
-  const checkoutState = useCheckoutElements();
-
-  async function submitPayment(
-    expressCheckoutConfirmEvent?: StripeExpressCheckoutElementConfirmEvent,
-  ) {
-    if (checkoutState.type !== 'success') {
-      expressCheckoutConfirmEvent?.paymentFailed({
-        message: 'Maksulomake ei ole vielä valmis. Yritä uudelleen.',
-      });
-      return;
-    }
-    const { checkout } = checkoutState;
-    onError(null);
-    onLoading(true);
-    try {
-      const result = await checkout.confirm({
-        redirect: 'if_required',
-        ...(expressCheckoutConfirmEvent ? { expressCheckoutConfirmEvent } : {}),
-      });
-      if (result.type === 'error') {
-        expressCheckoutConfirmEvent?.paymentFailed({ message: result.error.message });
-        onError(result.error.message ?? 'Maksu epäonnistui. Tarkista maksutiedot.');
-      } else {
-        cartStore.clear();
-        router.push(`/success?session_id=${encodeURIComponent(result.session.id)}`);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Maksu epäonnistui.';
-      expressCheckoutConfirmEvent?.paymentFailed({ message });
-      onError(message);
-    } finally {
-      onLoading(false);
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <ExpressCheckoutElement
-        options={{
-          buttonHeight: 48,
-          buttonType: { applePay: 'buy', googlePay: 'buy' },
-          buttonTheme: { applePay: 'black', googlePay: 'black' },
-          layout: { maxColumns: 2, maxRows: 1 },
-          paymentMethodOrder: ['apple_pay', 'google_pay'],
-          paymentMethods: { applePay: 'always', googlePay: 'always' },
-        }}
-        onConfirm={submitPayment}
-      />
-      <PaymentElement />
-      <Button
-        variant="cta"
-        size="lg"
-        className="w-full"
-        disabled={loading || checkoutState.type !== 'success'}
-        onClick={() => void submitPayment()}
-      >
-        {loading ? <LoadingPill className="bg-current/25" /> : 'Maksa turvallisesti'}
-      </Button>
     </div>
   );
 }

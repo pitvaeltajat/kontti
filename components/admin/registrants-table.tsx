@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { buildXlsx, toCsv } from '@/lib/spreadsheet';
 
-export type RegistrantColumnKind = 'name' | 'email' | 'answer' | 'date' | 'status';
+export type RegistrantColumnKind = 'name' | 'email' | 'answer' | 'date' | 'status' | 'actions';
 
 export type RegistrantColumn = {
   key: string;
@@ -16,18 +16,28 @@ export type RegistrantColumn = {
 
 export type RegistrantRow = {
   id: string;
+  participantId: string | null;
+  orderId: string;
   name: string;
   email: string | null;
   createdAt: string;
   status: string;
   answers: Record<string, string>;
+  orderPaidAt: string | null;
+  orderStripeSessionId: string | null;
+  orderTotalCents: number;
+  participantCancelled: boolean;
+  participantCancelledAt: string | null;
+  participantPriceCents: number;
+  participantRefundedAt: string | null;
 };
 
 type Sort = { key: string; direction: 'asc' | 'desc' };
 
-function statusLabel(status: string): string {
-  if (status === 'RECEIVED') return 'Lasku avoinna';
-  if (status === 'CANCELLED') return 'Peruutettu';
+function statusLabel(row: RegistrantRow): string {
+  if (row.participantRefundedAt) return 'Hyvitetty';
+  if (row.status === 'RECEIVED') return 'Lasku avoinna';
+  if (row.status === 'CANCELLED') return 'Peruutettu';
   return 'Maksettu';
 }
 
@@ -44,9 +54,11 @@ function value(row: RegistrantRow, column: RegistrantColumn): string {
     case 'date':
       return row.createdAt;
     case 'status':
-      return statusLabel(row.status);
+      return statusLabel(row);
     case 'answer':
       return row.answers[column.key] ?? '';
+    case 'actions':
+      return '';
   }
 }
 
@@ -59,10 +71,12 @@ export function RegistrantsTable({
   rows,
   columns,
   fileName,
+  renderActions,
 }: {
   rows: RegistrantRow[];
   columns: RegistrantColumn[];
   fileName: string;
+  renderActions?: (row: RegistrantRow) => React.ReactNode;
 }) {
   const [sort, setSort] = useState<Sort>({ key: 'createdAt', direction: 'asc' });
 
@@ -88,9 +102,10 @@ export function RegistrantsTable({
   }
 
   function matrix(): string[][] {
+    const exportColumns = columns.filter((column) => column.kind !== 'actions');
     return [
-      columns.map((column) => column.label),
-      ...sortedRows.map((row) => columns.map((column) => exportValue(row, column))),
+      exportColumns.map((column) => column.label),
+      ...sortedRows.map((row) => exportColumns.map((column) => exportValue(row, column))),
     ];
   }
 
@@ -132,6 +147,13 @@ export function RegistrantsTable({
           <thead>
             <tr className="border-b text-xs uppercase text-muted-foreground">
               {columns.map((column) => {
+                if (column.kind === 'actions') {
+                  return (
+                    <th key={column.key} className="px-4 py-3 font-normal align-middle">
+                      Toiminnot
+                    </th>
+                  );
+                }
                 const active = sort.key === column.key;
                 const ariaSort = active
                   ? sort.direction === 'asc'
@@ -177,13 +199,17 @@ export function RegistrantsTable({
                     className={`px-4 py-3 ${
                       column.kind === 'name'
                         ? 'font-medium'
-                        : column.kind === 'status'
+                        : column.kind === 'status' || column.kind === 'actions'
                           ? ''
                           : 'text-muted-foreground'
                     }`}
                   >
-                    {column.kind === 'status' ? (
-                      row.status === 'RECEIVED' ? (
+                    {column.kind === 'actions' ? (
+                      renderActions?.(row)
+                    ) : column.kind === 'status' ? (
+                      row.participantRefundedAt ? (
+                        <Badge variant="secondary">Hyvitetty</Badge>
+                      ) : row.status === 'RECEIVED' ? (
                         <Badge variant="warning">Lasku avoinna</Badge>
                       ) : row.status === 'CANCELLED' ? (
                         <Badge variant="secondary">Peruutettu</Badge>
@@ -191,7 +217,7 @@ export function RegistrantsTable({
                         <Badge variant="success">Maksettu</Badge>
                       )
                     ) : column.kind === 'email' ? (
-                      row.email ?? 'ei sähköpostia'
+                      (row.email ?? 'ei sähköpostia')
                     ) : column.kind === 'date' ? (
                       dateLabel(row.createdAt)
                     ) : (
