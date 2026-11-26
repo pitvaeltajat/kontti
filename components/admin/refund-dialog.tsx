@@ -61,13 +61,13 @@ export function ConfirmDialog({
       >
         <h2 className="text-lg font-bold">{title}</h2>
         <p className="mt-2 text-sm text-muted-foreground">{description}</p>
-        <div className="mt-4 flex items-start justify-between gap-3">
-          {children}
+        <div className="mt-4 flex items-start justify-end gap-3">
           <form method="dialog">
             <Button type="submit" size="sm" variant="outline">
               Sulje
             </Button>
           </form>
+          {children}
         </div>
       </dialog>
     </>
