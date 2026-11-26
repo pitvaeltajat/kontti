@@ -113,6 +113,7 @@ model Item {
   pastSlugs      ItemSlug[]
 
   @@index([categoryId, active])
+  @@index([accountingClassId])
 }
 
 /// A named purchasable option with its own price, for example a short or long
@@ -304,6 +305,7 @@ model KammiBooking {
   paymentReminderCount Int       @default(0)
 
   @@index([status, startDate])
+  @@index([accountingClassId])
 }
 
 enum BookingStatus {
