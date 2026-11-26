@@ -41,7 +41,7 @@ function CancelRegistrantForm({
       <input type="hidden" name="orderId" value={orderId} />
       {state.error && <p className="text-sm text-destructive">{state.error}</p>}
       <Button type="submit" variant="destructive" size="sm" disabled={pending}>
-        {pending ? <LoadingPill className="bg-current/25" /> : 'Peruuta'}
+        {pending ? <LoadingPill className="bg-current/25" /> : 'Vahvista'}
       </Button>
     </form>
   );
@@ -90,7 +90,7 @@ export function RegistrantsTableWithActions({
       return (
         <ConfirmDialog
           key="cancel"
-          triggerLabel="Vahvista"
+          triggerLabel="Peru ilmoittautuminen"
           triggerVariant="ghost"
           triggerSize="sm"
           title="Peru ilmoittautuminen"
@@ -118,7 +118,7 @@ export function RegistrantsTableWithActions({
       return (
         <ConfirmDialog
           key="refund"
-          triggerLabel="Vahvista"
+          triggerLabel="Hyvitä osallistumismaksu"
           triggerVariant="ghost"
           triggerSize="sm"
           title="Palauta maksu"
