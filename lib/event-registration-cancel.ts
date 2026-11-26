@@ -221,6 +221,15 @@ export type RefundPaymentResult =
   | { ok: true; refundedCents: number }
   | { ok: false; error: string; status: number };
 
+function isChargeAlreadyRefunded(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    'code' in error &&
+    (error as { code?: unknown }).code === 'charge_already_refunded'
+  );
+}
+
 async function refundStripePayment(
   stripeSessionId: string | null,
   amount: number,
@@ -231,18 +240,31 @@ async function refundStripePayment(
   }
   try {
     const session = await getStripe().checkout.sessions.retrieve(stripeSessionId, {
-      expand: ['payment_intent'],
+      expand: ['payment_intent.latest_charge'],
     });
     const paymentIntent = session.payment_intent;
     const paymentIntentId =
       typeof paymentIntent === 'string' ? paymentIntent : (paymentIntent?.id ?? null);
     if (!paymentIntentId) throw new Error('Maksun tunnistetta ei löytynyt.');
+    if (typeof paymentIntent !== 'string') {
+      const latestCharge = paymentIntent?.latest_charge;
+      if (
+        typeof latestCharge === 'object' &&
+        latestCharge !== null &&
+        latestCharge.refunded === true
+      ) {
+        return { ok: true, refundedCents: amount };
+      }
+    }
     await getStripe().refunds.create(
       { payment_intent: paymentIntentId, amount },
       { idempotencyKey },
     );
     return { ok: true, refundedCents: amount };
   } catch (error) {
+    if (isChargeAlreadyRefunded(error)) {
+      return { ok: true, refundedCents: amount };
+    }
     console.error('Maksun palautus epäonnistui:', error);
     return {
       ok: false,
