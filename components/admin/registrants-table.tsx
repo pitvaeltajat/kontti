@@ -1,6 +1,8 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { format } from 'date-fns';
+import { fi } from 'date-fns/locale';
 import { ArrowDown, ArrowUp, ArrowUpDown, Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -42,7 +44,11 @@ function statusLabel(row: RegistrantRow): string {
 }
 
 function dateLabel(iso: string): string {
-  return new Date(iso).toLocaleDateString('fi-FI');
+  return format(new Date(iso), 'd.M.yyyy HH:mm', { locale: fi });
+}
+
+function exportDateLabel(iso: string): string {
+  return format(new Date(iso), 'd.M.yyyy HH:mm:ss', { locale: fi });
 }
 
 function value(row: RegistrantRow, column: RegistrantColumn): string {
@@ -63,7 +69,7 @@ function value(row: RegistrantRow, column: RegistrantColumn): string {
 }
 
 function exportValue(row: RegistrantRow, column: RegistrantColumn): string {
-  if (column.kind === 'date') return dateLabel(row.createdAt);
+  if (column.kind === 'date') return exportDateLabel(row.createdAt);
   return value(row, column);
 }
 
