@@ -86,7 +86,7 @@ export default async function KammiPage() {
         <div className="rounded-lg border bg-card p-4 text-sm shadow-sm">
           <p className="font-semibold">Viikonloppu (pe–su)</p>
           <p className="mt-1 text-muted-foreground">
-            Partiolainen {formatCents(settings.weekendScoutCents)} · Muu varaaja{' '}
+            Partiolainen (alennettu hinta) {formatCents(settings.weekendScoutCents)} · Muu varaaja{' '}
             {formatCents(settings.weekendOtherCents)}
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
@@ -97,8 +97,8 @@ export default async function KammiPage() {
         <div className="rounded-lg border bg-card p-4 text-sm shadow-sm">
           <p className="font-semibold">Arkivuorokausi</p>
           <p className="mt-1 text-muted-foreground">
-            Partiolainen {formatCents(settings.weekdayScoutCents)}/yö · Muu varaaja{' '}
-            {formatCents(settings.weekdayOtherCents)}/yö
+            Partiolainen (alennettu hinta) {formatCents(settings.weekdayScoutCents)}/yö · Muu
+            varaaja {formatCents(settings.weekdayOtherCents)}/yö
           </p>
           <p className="mt-1 text-xs text-muted-foreground">
             Pidemmät varaukset sovitaan erikseen kämppäisännän kanssa.

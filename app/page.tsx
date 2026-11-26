@@ -45,16 +45,19 @@ export default async function HomePage() {
     priceCents: lowestVariantPrice(item.variants),
   }));
 
-  const grouped = [...categories]
-    .sort((a, b) => {
-      if (a.slug === 'tapahtumat') return -1;
-      if (b.slug === 'tapahtumat') return 1;
-      return 0;
-    })
+  const grouped = categories
     .map((category) => ({
       ...category,
       items: catalogItems.filter((item) => item.categoryId === category.id),
-    }));
+    }))
+    .sort((a, b) => {
+      const aEvent = a.items.some((item) => item.isEvent);
+      const bEvent = b.items.some((item) => item.isEvent);
+      if (aEvent && !bEvent) return -1;
+      if (!aEvent && bEvent) return 1;
+      return 0;
+    });
+  const visibleCategories = grouped.filter((category) => category.items.length > 0);
 
   return (
     <div>
@@ -67,6 +70,7 @@ export default async function HomePage() {
           <>
             {catalogItems.some((item) => item.featured) && (
               <section className="border-t py-8">
+                <h2 className="mb-4 text-xl font-bold">Nostot</h2>
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                   {catalogItems
                     .filter((item) => item.featured)
@@ -78,26 +82,25 @@ export default async function HomePage() {
               </section>
             )}
             <section className="space-y-10 pb-8">
-              {grouped.map((category) => (
-                <div key={category.id}>
-                  <h2 className="mb-4 text-xl font-bold">{category.name}</h2>
-                  <div
-                    className={
-                      category.slug === 'tapahtumat'
-                        ? 'grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4'
-                        : 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4'
-                    }
-                  >
-                    {category.items.map((item) => (
-                      <ItemCard
-                        key={item.id}
-                        item={item}
-                        listOnMobile={category.slug === 'tapahtumat'}
-                      />
-                    ))}
+              {visibleCategories.map((category) => {
+                const isEventCategory = category.items.some((item) => item.isEvent);
+                return (
+                  <div key={category.id}>
+                    <h2 className="mb-4 text-xl font-bold">{category.name}</h2>
+                    <div
+                      className={
+                        isEventCategory
+                          ? 'grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4'
+                          : 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4'
+                      }
+                    >
+                      {category.items.map((item) => (
+                        <ItemCard key={item.id} item={item} listOnMobile={isEventCategory} />
+                      ))}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </section>
           </>
         )}

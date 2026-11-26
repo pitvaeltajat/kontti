@@ -26,7 +26,7 @@ export function SiteBanner({
               navy text keeps enough contrast over any image. */}
           <div
             aria-hidden
-            className="absolute inset-0 -z-10 bg-gradient-to-b from-card/80 via-card/60 to-card"
+            className="absolute inset-0 -z-10 bg-gradient-to-b from-card/95 via-card/80 to-card"
           />
         </>
       )}
@@ -38,9 +38,7 @@ export function SiteBanner({
             Pitkäjärven Vaeltajat ry
           </h1>
           <p className="mt-2 max-w-xl text-sm text-foreground/75 md:text-base">
-            Partiolippukunta Pitkäjärven Vaeltajien nettikauppa ja ilmoittautumisportaali. Täältä
-            voit ostaa huiveja, merkkejä ja PitVa-tuotteita sekä ilmoittautua tapahtumiin. Tuotteet
-            saat kokouksessa ryhmänjohtajaltasi tai noutamalla ne sovitusti kololta.
+            Huivit, merkit ja tapahtumailmoittautumiset yhdessä paikassa.
           </p>
         </div>
 

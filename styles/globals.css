@@ -266,6 +266,18 @@
     -webkit-user-select: text;
     user-select: text;
   }
+  /* One ring for every interactive element. Inputs/selects/textarea keep their
+     own `focus-visible:ring-2` box-shadow, so they are deliberately excluded
+     here to avoid a double treatment. */
+  a:focus-visible,
+  button:focus-visible,
+  [role='button']:focus-visible,
+  summary:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 2px;
+    border-radius: var(--radius);
+  }
   /* Klapi pads `main` by 100px for its fixed header; kauppa's header is
      `sticky`, so it occupies layout space and `main` needs no top padding. */
 }
@@ -364,6 +376,11 @@
   textarea,
   select {
     font-size: 16px;
+  }
+
+  .tap-target {
+    min-height: 2.75rem;
+    min-width: 2.75rem;
   }
 }
 

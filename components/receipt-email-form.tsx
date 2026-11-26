@@ -47,7 +47,7 @@ export function ReceiptEmailForm({ sessionId }: { sessionId: string }) {
           type="email"
           value={email}
           onChange={(event) => setEmail(event.target.value)}
-          placeholder="sinä@example.com"
+          placeholder="etunimi@example.com"
           aria-label="Sähköpostiosoite kuittia varten"
         />
         <Button
@@ -59,7 +59,11 @@ export function ReceiptEmailForm({ sessionId }: { sessionId: string }) {
           {loading ? <LoadingPill /> : 'Lähetä kuitti'}
         </Button>
       </div>
-      {error && <p className="text-xs text-destructive">{error}</p>}
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

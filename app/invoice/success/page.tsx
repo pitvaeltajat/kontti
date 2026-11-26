@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma';
 import { formatCents } from '@/lib/money';
 import { ButtonLink } from '@/components/ui/button-link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { CopyableOrderRef } from '@/components/copyable-order-ref';
 
 export const metadata: Metadata = { title: 'Lasku lähetetty' };
 
@@ -26,6 +27,7 @@ export default async function InvoiceSuccessPage({
           totalCents: true,
           invoiceUrl: true,
           invoicePdfUrl: true,
+          invoiceDueAt: true,
           lines: { select: { name: true, quantity: true, priceCents: true } },
         },
       })
@@ -42,11 +44,8 @@ export default async function InvoiceSuccessPage({
           {order ? (
             <>
               <p className="text-sm text-muted-foreground">
-                Ilmoittautuminen{' '}
-                <span className="font-medium text-foreground">
-                  #{order.id.slice(-8).toUpperCase()}
-                </span>{' '}
-                on vastaanotettu. Lasku lähetettiin osoitteeseen{' '}
+                <CopyableOrderRef orderId={order.id} label="Ilmoittautumisnumero" /> on
+                vastaanotettu. Lasku lähetettiin osoitteeseen{' '}
                 <span className="font-medium text-foreground">{order.email}</span>. Ilmoittautuminen
                 vahvistuu, kun lasku on maksettu.
               </p>
@@ -98,8 +97,9 @@ export default async function InvoiceSuccessPage({
             </p>
           )}
           <div className="rounded-md bg-accent/60 px-4 py-3 text-xs text-muted-foreground">
-            Tarkistathan, että vanhempi maksaa laskun ennen tapahtumaa. Laskun eräpäivä on 14 päivän
-            kuluttua.
+            {order?.invoiceDueAt
+              ? `Tarkistathan, että vanhempi maksaa laskun ennen tapahtumaa. Laskun eräpäivä: ${order.invoiceDueAt.toLocaleDateString('fi-FI')}.`
+              : 'Tarkistathan, että vanhempi maksaa laskun ennen tapahtumaa. Laskun eräpäivä on 14 päivän kuluttua.'}
           </div>
           <div className="flex justify-center pt-2">
             <ButtonLink href="/" variant="cta">

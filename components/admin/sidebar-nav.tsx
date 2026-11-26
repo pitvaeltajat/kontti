@@ -43,7 +43,7 @@ export function AdminSidebarNav({ superadmin }: { superadmin: boolean }) {
             label: 'Ylläpito',
             links: [
               { href: '/admin/accounting-classes', label: 'Kirjanpitoluokat' },
-              { href: '/admin/asetukset', label: 'Asetukset' },
+              { href: '/admin/asetukset', label: 'Etusivun banneri' },
               { href: '/admin/users', label: 'Käyttäjät' },
             ],
           },
@@ -71,6 +71,7 @@ export function AdminSidebarNav({ superadmin }: { superadmin: boolean }) {
               <Link
                 key={link.href}
                 href={link.href}
+                aria-current={isActive(link.href) ? 'page' : undefined}
                 className={cn(
                   'shrink-0 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   isActive(link.href)

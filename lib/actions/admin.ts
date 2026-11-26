@@ -346,6 +346,14 @@ export async function hideItem(formData: FormData): Promise<void> {
   revalidatePath('/', 'layout');
 }
 
+export async function restoreItem(formData: FormData): Promise<void> {
+  if (!isSuperAdmin(await currentRole())) return;
+  const id = ((formData.get('id') as string) ?? '').trim();
+  if (!id) return;
+  await prisma.item.update({ where: { id }, data: { active: true } });
+  revalidatePath('/', 'layout');
+}
+
 /** Toggle an event's "unlisted" flag (off the front page, direct link still
  * works). Event admins and superadmins; events only. */
 export async function setEventHidden(formData: FormData): Promise<void> {

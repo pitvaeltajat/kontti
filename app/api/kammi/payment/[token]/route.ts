@@ -42,7 +42,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       ],
       customer_email: payerEmail ?? undefined,
       metadata: { kammiBookingId: booking.id },
-      success_url: `${appUrl}/kammi/kiitos`,
+      success_url: `${appUrl}/kammi/kiitos?status=paid`,
       cancel_url: `${appUrl}/kammi/pay/${encodeURIComponent(token)}`,
       locale: 'fi',
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60,

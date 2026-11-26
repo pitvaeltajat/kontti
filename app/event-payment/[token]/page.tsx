@@ -6,6 +6,7 @@ import { formatEventDates } from '@/lib/catalog';
 import { canCancelEventRegistration } from '@/lib/event-registration';
 import { ClearCartOnSuccess } from '@/components/clear-cart-on-success';
 import { EventPayment } from '@/components/event-payment';
+import { PaymentLinkExpired } from '@/components/payment-link-expired';
 
 export const metadata: Metadata = { title: 'Tapahtumamaksu' };
 
@@ -27,7 +28,8 @@ export default async function EventPaymentPage({ params }: { params: Promise<{ t
       },
     },
   });
-  if (!order || !order.lines.length || order.lines.some((line) => !line.item.isEvent)) notFound();
+  if (!order) return <PaymentLinkExpired />;
+  if (!order.lines.length || order.lines.some((line) => !line.item.isEvent)) notFound();
 
   const event = order.lines[0].item;
   const eventName = order.lines.map((line) => line.name).join(', ');

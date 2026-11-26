@@ -78,7 +78,7 @@ export async function POST(req: Request) {
           url:
             paymentRequest && existing.paymentToken
               ? `/kammi/pay/${encodeURIComponent(existing.paymentToken)}`
-              : '/kammi/kiitos',
+              : '/kammi/kiitos?status=free',
         });
       }
       if (existing.stripeSessionId) {
@@ -118,7 +118,7 @@ export async function POST(req: Request) {
     await trySendEmail(`kammi host notice ${result.booking.id}`, () =>
       sendKammiHostNotificationEmail(result.booking.id),
     );
-    return NextResponse.json({ url: '/kammi/kiitos' });
+    return NextResponse.json({ url: '/kammi/kiitos?status=free' });
   }
 
   const hold = await createKammiHold(holdInput, {
@@ -162,7 +162,7 @@ export async function POST(req: Request) {
         ],
         customer_email: email,
         metadata: { kammiBookingId: booking.id },
-        success_url: `${appUrl}/kammi/kiitos`,
+        success_url: `${appUrl}/kammi/kiitos?status=paid`,
         cancel_url: `${appUrl}/kammi`,
         locale: 'fi',
         expires_at: Math.floor(Date.now() / 1000) + 30 * 60,

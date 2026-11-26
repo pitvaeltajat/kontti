@@ -22,9 +22,15 @@ export function LoginForm({
   const [loading, setLoading] = useState(false);
 
   async function googleSignIn() {
+    setError(null);
     setLoading(true);
-    await signIn('google', { callbackUrl });
-    // signIn redirects; no setLoading(false) needed on success.
+    try {
+      await signIn('google', { callbackUrl });
+    } catch {
+      setError('Kirjautuminen epäonnistui. Yritä uudelleen.');
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function devSignIn(e: React.FormEvent<HTMLFormElement>) {
@@ -47,9 +53,18 @@ export function LoginForm({
         <CardTitle>Kirjaudu sisään</CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
-        <Button className="w-full" variant="secondary" onClick={googleSignIn} disabled={loading}>
+        <Button className="w-full" variant="cta" onClick={googleSignIn} disabled={loading}>
           {loading ? <LoadingPill /> : 'Jatka Google-tilillä'}
         </Button>
+        <p className="text-center text-xs text-muted-foreground">
+          Käytämme Google-tiliä vain kirjautumiseen. Emme näe salasanaasi.
+        </p>
+
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
 
         {devEnabled && (
           <form onSubmit={devSignIn} className="space-y-3 border-t pt-4">
@@ -67,8 +82,7 @@ export function LoginForm({
                 placeholder="etunimi@example.com"
               />
             </div>
-            {error && <p className="text-sm text-destructive">{error}</p>}
-            <Button type="submit" disabled={loading || !email.includes('@')}>
+            <Button type="submit" variant="outline" disabled={loading || !email.includes('@')}>
               {loading ? <LoadingPill className="bg-current/25" /> : 'Kirjaudu (kehitys)'}
             </Button>
           </form>

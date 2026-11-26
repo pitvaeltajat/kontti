@@ -151,12 +151,21 @@ export default async function AdminPayoutsPage() {
                   </summary>
                   <div className="mt-2 overflow-x-auto">
                     <table className="w-full min-w-[520px] text-sm">
+                      <caption className="sr-only">Tilityksen tapahtumat</caption>
                       <thead>
                         <tr className="border-b text-left text-xs text-muted-foreground">
-                          <th className="py-1 pr-3 font-medium">Tapahtuma</th>
-                          <th className="py-1 px-3 text-right font-medium">Brutto</th>
-                          <th className="py-1 px-3 text-right font-medium">Kulu</th>
-                          <th className="py-1 pl-3 text-right font-medium">Netto</th>
+                          <th scope="col" className="py-1 pr-3 font-medium">
+                            Tapahtuma
+                          </th>
+                          <th scope="col" className="py-1 px-3 text-right font-medium">
+                            Brutto
+                          </th>
+                          <th scope="col" className="py-1 px-3 text-right font-medium">
+                            Kulu
+                          </th>
+                          <th scope="col" className="py-1 pl-3 text-right font-medium">
+                            Netto
+                          </th>
                         </tr>
                       </thead>
                       <tbody>

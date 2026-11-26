@@ -30,6 +30,13 @@ export function isEventOver(endsAt: Date | null | undefined, now: Date = new Dat
   return endsAt != null && endsAt.getTime() < now.getTime() - EVENT_GRACE_MS;
 }
 
+/** Stock wording shared by the storefront surfaces (item card, item page, cart). */
+export function itemStockLabel(stock: number | null): string {
+  if (stock === 0) return 'Loppu varastosta';
+  if (stock === null) return 'Saatavilla';
+  return `${stock} varastossa`;
+}
+
 /** "28.11.2026" or "28.11.2026 – 29.11.2026" for display; empty without dates. */
 export function formatEventDates(
   startsAt: Date | null | undefined,

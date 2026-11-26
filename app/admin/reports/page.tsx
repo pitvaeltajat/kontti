@@ -168,11 +168,12 @@ function ReportTable({
       <h2 className="mb-3 font-semibold">{title}</h2>
       <div className="overflow-hidden rounded-lg border bg-card shadow-sm">
         <table className="w-full text-sm">
+          <caption className="sr-only">{title}</caption>
           <thead>
             <tr className="border-b bg-background text-left text-muted-foreground">
-              <th className="px-4 py-2 font-medium">Nimi</th>
-              <th className="px-4 py-2 text-right font-medium">Kpl</th>
-              <th className="px-4 py-2 text-right font-medium">Myynti</th>
+              <th scope="col" className="px-4 py-2 font-medium">Nimi</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium">Kpl</th>
+              <th scope="col" className="px-4 py-2 text-right font-medium">Myynti</th>
             </tr>
           </thead>
           <tbody>

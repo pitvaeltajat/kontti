@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { CalendarDays } from 'lucide-react';
 import { formatCents } from '@/lib/money';
-import { formatEventDates } from '@/lib/catalog';
+import { formatEventDates, itemStockLabel } from '@/lib/catalog';
 import { ItemImage } from '@/components/item-image';
 import { cn } from '@/lib/cn';
 
@@ -85,13 +85,9 @@ export function ItemCard({
         <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{item.description}</p>
         {!item.isEvent && (
           <p className="mt-2 text-xs">
-            {soldOut ? (
-              <span className="font-medium text-destructive">Loppu varastosta</span>
-            ) : item.stock !== null ? (
-              <span className="text-muted-foreground">{item.stock} varastossa</span>
-            ) : (
-              <span className="text-muted-foreground">Saatavilla</span>
-            )}
+            <span className={soldOut ? 'font-medium text-destructive' : 'text-muted-foreground'}>
+              {itemStockLabel(item.stock)}
+            </span>
           </p>
         )}
       </div>

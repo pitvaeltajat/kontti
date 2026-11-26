@@ -150,12 +150,13 @@ export function RegistrantsTable({
       </div>
       <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
         <table className="w-full min-w-[640px] text-left text-sm">
+          <caption className="sr-only">Ilmoittautuneet</caption>
           <thead>
             <tr className="border-b text-xs uppercase text-muted-foreground">
               {columns.map((column) => {
                 if (column.kind === 'actions') {
                   return (
-                    <th key={column.key} className="px-4 py-3 font-normal align-middle">
+                    <th key={column.key} scope="col" className="px-4 py-3 font-normal align-middle">
                       Toiminnot
                     </th>
                   );
@@ -169,6 +170,7 @@ export function RegistrantsTable({
                 return (
                   <th
                     key={column.key}
+                    scope="col"
                     aria-sort={ariaSort}
                     className="px-4 py-3 font-normal align-middle"
                   >

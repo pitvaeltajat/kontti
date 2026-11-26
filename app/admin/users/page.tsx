@@ -43,13 +43,14 @@ export default async function AdminUsersPage() {
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
           <table className="w-full min-w-[640px] text-left text-sm">
+            <caption className="sr-only">Käyttäjät</caption>
             <thead>
               <tr className="border-b text-xs uppercase text-muted-foreground">
-                <th className="px-4 py-3">Sähköposti</th>
-                <th className="px-4 py-3">Nimi</th>
-                <th className="px-4 py-3">Rooli</th>
-                <th className="px-4 py-3">Rekisteröitynyt</th>
-                <th className="px-4 py-3 text-right">Toiminnot</th>
+                <th scope="col" className="px-4 py-3">Sähköposti</th>
+                <th scope="col" className="px-4 py-3">Nimi</th>
+                <th scope="col" className="px-4 py-3">Rooli</th>
+                <th scope="col" className="px-4 py-3">Rekisteröitynyt</th>
+                <th scope="col" className="px-4 py-3 text-right">Toiminnot</th>
               </tr>
             </thead>
             <tbody>

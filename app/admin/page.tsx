@@ -8,7 +8,7 @@ import { requireSuperAdmin } from '@/lib/admin-guard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/admin/refund-dialog';
-import { RefundOrderForm } from '@/components/admin/order-actions';
+import { CancelOrderForm, RefundOrderForm } from '@/components/admin/order-actions';
 
 export const metadata: Metadata = { title: 'Tilaukset' };
 
@@ -73,7 +73,7 @@ export default async function AdminOrdersPage({
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Tilaukset</h1>
         <div className="text-sm text-muted-foreground">
-          Näytetään {orders.length} tilausta · yhteensä {formatCents(total)}
+          Näytetään {orders.length} viimeisintä · yhteensä {formatCents(total)}
         </div>
       </div>
 
@@ -216,6 +216,17 @@ export default async function AdminOrdersPage({
                 </ul>
 
                 <div className="relative z-10 mt-3 flex flex-wrap gap-2">
+                  {order.status === 'RECEIVED' && (
+                    <ConfirmDialog
+                      triggerLabel="Peru tilaus"
+                      triggerVariant="destructive"
+                      triggerSize="sm"
+                      title="Peru tilaus"
+                      description="Perutaanko tilaus? Tätä ei voi perua."
+                    >
+                      <CancelOrderForm orderId={order.id} statusParam={statusParam} />
+                    </ConfirmDialog>
+                  )}
                   {order.status === 'CANCELLED' &&
                     order.paidAt &&
                     order.stripeSessionId &&

@@ -340,7 +340,8 @@ export function EventPayment({
           {!cancelled && canCancel && (
             <section className="space-y-3 border-t pt-4">
               <p className="text-sm text-muted-foreground">
-                Ilmoittautumisen voi perua {registrationDeadline ?? 'IlmoDL-päivään'} mennessä.
+                Ilmoittautumisen voi perua {registrationDeadline ?? 'ilmoittautumisen määräaikaan'}{' '}
+                mennessä.
                 Maksun palautus käsitellään ylläpidossa.
               </p>
               <Button

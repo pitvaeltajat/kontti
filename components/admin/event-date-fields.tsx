@@ -91,7 +91,7 @@ export function EventDateFields({
         <input type="hidden" name="endsAt" value={formatDate(end)} />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="registrationDeadline">IlmoDL *</Label>
+        <Label htmlFor="registrationDeadline">Ilmoittautumisen määräaika *</Label>
         <DatePicker
           id="registrationDeadline"
           selected={deadline}

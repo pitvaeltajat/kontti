@@ -56,13 +56,24 @@ export default async function AdminEventsPage() {
       ) : (
         <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
           <table className="w-full min-w-[720px] text-left text-sm">
+            <caption className="sr-only">Tapahtumat</caption>
             <thead>
               <tr className="border-b text-xs uppercase text-muted-foreground">
-                <th className="px-4 py-3">Tapahtuma</th>
-                <th className="px-4 py-3">Ajankohta</th>
-                <th className="px-4 py-3 text-right">Hinta</th>
-                <th className="px-4 py-3">Tila</th>
-                <th className="px-4 py-3 text-right">Toiminnot</th>
+                <th scope="col" className="px-4 py-3">
+                  Tapahtuma
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Ajankohta
+                </th>
+                <th scope="col" className="px-4 py-3 text-right">
+                  Hinta
+                </th>
+                <th scope="col" className="px-4 py-3">
+                  Tila
+                </th>
+                <th scope="col" className="px-4 py-3 text-right">
+                  Toiminnot
+                </th>
               </tr>
             </thead>
             <tbody>

@@ -34,59 +34,59 @@ export default async function AdminCategoriesPage() {
         {categories.map((category) =>
           (() => {
             const systemCategory = isSystemCategorySlug(category.slug);
+            const deleteReason = systemCategory
+              ? 'Järjestelmäkategoriaa ei voi poistaa.'
+              : category._count.items > 0
+                ? 'Kategoriassa on tuotteita. Siirrä tai piilota ne ensin.'
+                : null;
             return (
-              <div
-                key={category.id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border bg-card p-4 shadow-sm"
-              >
-                <div>
-                  <p className="font-semibold">
-                    {category.name}
-                    <span className="ml-2 text-xs font-normal text-muted-foreground">
-                      /{category.slug} · {category.sortOrder}
-                    </span>
-                  </p>
-                  {systemCategory && (
-                    <p className="mt-1 text-xs font-medium text-muted-foreground">
-                      Järjestelmäkategoria
+              <div key={category.id} className="rounded-lg border bg-card p-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <p className="font-semibold">
+                      {category.name}
+                      <span className="ml-2 text-xs font-normal text-muted-foreground">
+                        /{category.slug} · {category.sortOrder}
+                      </span>
                     </p>
-                  )}
-                  {category.description && (
-                    <p className="mt-0.5 text-sm text-muted-foreground">{category.description}</p>
-                  )}
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {category._count.items} tuotetta
-                  </p>
+                    {systemCategory && (
+                      <p className="mt-1 text-xs font-medium text-muted-foreground">
+                        Järjestelmäkategoria
+                      </p>
+                    )}
+                    {category.description && (
+                      <p className="mt-0.5 text-sm text-muted-foreground">{category.description}</p>
+                    )}
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {category._count.items} tuotetta
+                    </p>
+                  </div>
+                  <div className="flex gap-2">
+                    {!systemCategory && (
+                      <ButtonLink
+                        href={`/admin/categories/${category.id}`}
+                        size="sm"
+                        variant="outline"
+                      >
+                        Muokkaa
+                      </ButtonLink>
+                    )}
+                    <form action={deleteCategory}>
+                      <input type="hidden" name="id" value={category.id} />
+                      <FormButton
+                        size="sm"
+                        variant="ghost"
+                        disabled={systemCategory || category._count.items > 0}
+                        confirm={`Poista kategoria "${category.name}"? Tätä ei voi perua.`}
+                      >
+                        Poista
+                      </FormButton>
+                    </form>
+                  </div>
                 </div>
-                <div className="flex gap-2">
-                  {!systemCategory && (
-                    <ButtonLink
-                      href={`/admin/categories/${category.id}`}
-                      size="sm"
-                      variant="outline"
-                    >
-                      Muokkaa
-                    </ButtonLink>
-                  )}
-                  <form action={deleteCategory}>
-                    <input type="hidden" name="id" value={category.id} />
-                    <FormButton
-                      size="sm"
-                      variant="ghost"
-                      disabled={systemCategory || category._count.items > 0}
-                      confirm={`Poista kategoria "${category.name}"? Tätä ei voi perua.`}
-                      title={
-                        systemCategory
-                          ? 'Järjestelmäkategoriaa ei voi poistaa.'
-                          : category._count.items > 0
-                            ? 'Kategoriassa on tuotteita. Siirrä tai piilota ne ensin.'
-                            : 'Poista kategoria'
-                      }
-                    >
-                      Poista
-                    </FormButton>
-                  </form>
-                </div>
+                {deleteReason && (
+                  <p className="mt-2 text-xs text-muted-foreground">{deleteReason}</p>
+                )}
               </div>
             );
           })(),

@@ -4,7 +4,7 @@ import { notFound } from 'next/navigation';
 import { ChevronRight, CalendarDays, Pencil } from 'lucide-react';
 import { prisma } from '@/lib/prisma';
 import { formatCents } from '@/lib/money';
-import { formatEventDates, isEventOver } from '@/lib/catalog';
+import { formatEventDates, itemStockLabel } from '@/lib/catalog';
 import { ItemImage } from '@/components/item-image';
 import { AddToCartForm } from '@/components/add-to-cart-form';
 import { Badge } from '@/components/ui/badge';
@@ -66,7 +66,14 @@ export default async function ItemPage({ params }: { params: Promise<{ slug: str
 
   const soldOut = item.stock === 0;
   const eventDates = item.isEvent ? formatEventDates(item.startsAt, item.endsAt) : '';
-  const eventOver = item.isEvent && isEventOver(item.endsAt);
+  // Registration closes at the deadline, or at the event end when no deadline
+  // is set. `isEventOver` is a 7-day listing grace, not a registration cutoff.
+  const now = new Date();
+  const registrationClosed =
+    item.isEvent &&
+    (item.registrationDeadline
+      ? item.registrationDeadline.getTime() < now.getTime()
+      : item.endsAt != null && item.endsAt.getTime() < now.getTime());
   const role = await adminRole();
   const canEdit = item.isEvent ? isEventAdmin(role) : isSuperAdmin(role);
 
@@ -120,21 +127,19 @@ export default async function ItemPage({ params }: { params: Promise<{ slug: str
             })()}
           </p>
 
-          {eventOver && (
+          {registrationClosed && (
             <p className="mt-3 rounded-md border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning">
-              Tapahtuma on jo päättynyt. Ilmoittautuminen ei välttämättä ole enää mahdollista.
+              Ilmoittautuminen on päättynyt.
             </p>
           )}
 
           {!item.isEvent && (
             <div className="mt-3">
-              {soldOut ? (
-                <Badge variant="destructive">Loppu varastosta</Badge>
-              ) : item.stock !== null ? (
-                <Badge variant="success">{item.stock} varastossa</Badge>
-              ) : (
-                <Badge variant="secondary">Saatavilla</Badge>
-              )}
+              <Badge
+                variant={soldOut ? 'destructive' : item.stock !== null ? 'success' : 'secondary'}
+              >
+                {itemStockLabel(item.stock)}
+              </Badge>
             </div>
           )}
 
@@ -149,7 +154,8 @@ export default async function ItemPage({ params }: { params: Promise<{ slug: str
               itemId={item.id}
               variants={item.variants}
               withQuantity
-              disabled={soldOut}
+              disabled={soldOut || registrationClosed}
+              disabledLabel={registrationClosed ? 'Ilmoittautuminen päättynyt' : undefined}
             />
           </div>
 

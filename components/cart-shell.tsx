@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Minus, Plus, Trash2, ShoppingCart } from 'lucide-react';
 import { cartStore, useCart } from '@/lib/cart';
 import { formatCents } from '@/lib/money';
+import { itemStockLabel } from '@/lib/catalog';
 import {
   type DiscountCodeLike,
   discountApplies,
@@ -44,14 +45,17 @@ type AnswerValue = string | string[];
 type Answers = Record<string, Record<string, AnswerValue[]>>;
 
 const stripeConfigured = Boolean(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY);
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function CartShell({ initialUser }: { initialUser: { name: string; email: string } }) {
   const router = useRouter();
   const { items } = useCart();
   const [catalog, setCatalog] = useState<Map<string, FetchedItem>>(new Map());
   const [catalogLoadedFor, setCatalogLoadedFor] = useState<string | null>(null);
+  const [catalogError, setCatalogError] = useState<string | null>(null);
   const [answers, setAnswers] = useState<Answers>({});
   const [email, setEmail] = useState(initialUser.email);
+  const [emailTouched, setEmailTouched] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [codeInput, setCodeInput] = useState('');
@@ -60,6 +64,7 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
   const [codeChecking, setCodeChecking] = useState(false);
   const checkoutRequestKey = useRef<string | null>(null);
   const checkoutGeneration = useRef(0);
+  const catalogRequestId = useRef(0);
   const [paymentMethod, setPaymentMethod] = useState<'card' | 'deferred'>('card');
   const participantNamesPrefilled = useRef(false);
 
@@ -67,25 +72,28 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
   const idsKey = ids.join(',');
   const catalogLoaded = catalogLoadedFor === idsKey;
 
-  // Fetch fresh catalog rows for whatever is in the cart.
-  useEffect(() => {
+  // Fetch fresh catalog rows for whatever is in the cart. Extracted so the
+  // load-error state can retry the same request.
+  const loadCatalog = useCallback(() => {
     if (ids.length === 0) return;
-    let cancelled = false;
+    const requestId = ++catalogRequestId.current;
     fetch(`/api/items?ids=${ids.map(encodeURIComponent).join(',')}`)
       .then((r) => r.json())
       .then((data: { items?: FetchedItem[] }) => {
-        if (cancelled) return;
+        if (catalogRequestId.current !== requestId) return;
         setCatalog(new Map((data.items ?? []).map((item) => [item.id, item])));
         setCatalogLoadedFor(idsKey);
+        setCatalogError(null);
       })
       .catch(() => {
-        if (!cancelled)
-          setError('Tuotteiden tietoja ei voitu ladata. Päivitä sivu ja yritä uudelleen.');
+        if (catalogRequestId.current !== requestId) return;
+        setCatalogError('Tuotteiden tietoja ei voitu ladata.');
       });
-    return () => {
-      cancelled = true;
-    };
   }, [ids, idsKey]);
+
+  useEffect(() => {
+    loadCatalog();
+  }, [loadCatalog]);
 
   const lines = items.flatMap((cartItem) => {
     const item = catalog.get(cartItem.id);
@@ -97,6 +105,9 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
   const eventOnly = lines.length > 0 && lines.every(({ item }) => item?.isEvent === true);
   const hasInvalidVariant = lines.some(({ item, variant }) => item && !variant);
   const deferredCheckout = eventOnly && paymentMethod === 'deferred';
+  const hasQuestions = lines.some(({ item }) => item && item.questions.length > 0);
+  const emailInvalid = email.trim() !== '' && !EMAIL_RE.test(email);
+  const showEmailError = emailTouched && emailInvalid;
 
   // A signed-in user's details are the convenient default, but only fill empty
   // fields once so changing the cart or editing a field never overwrites input.
@@ -218,6 +229,8 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
 
   const goToCheckout = useCallback(async () => {
     setError(null);
+    setEmailTouched(true);
+    if (email.trim() !== '' && !EMAIL_RE.test(email)) return;
     if (lines.length === 0 || lines.some(({ item }) => !item)) {
       setError('Jokin korin tuotteista ei ole enää myynnissä. Poista se korista.');
       return;
@@ -339,6 +352,7 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
       {/* Lines */}
       <div className="space-y-3">
+        {hasQuestions && <p className="text-sm text-muted-foreground">* – pakollinen</p>}
         {lines.map(({ cartItem, item, variant }) => (
           <div
             key={`${cartItem.id}:${cartItem.variantId ?? ''}`}
@@ -362,6 +376,9 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
                         : 'Vaihtoehto ei ole enää saatavilla'}
                       {variant?.name ? ` - ${variant.name}` : ''}
                     </p>
+                    {!item.isEvent && item.stock === 0 && (
+                      <p className="text-xs text-muted-foreground">{itemStockLabel(item.stock)}</p>
+                    )}
                   </>
                 ) : catalogLoaded ? (
                   <>
@@ -381,7 +398,7 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
                     <button
                       type="button"
                       aria-label="Vähennä"
-                      className="flex h-full w-8 items-center justify-center text-muted-foreground hover:text-foreground"
+                      className="tap-target flex h-full w-8 items-center justify-center text-muted-foreground hover:text-foreground"
                       onClick={() =>
                         cartStore.setQuantity(
                           cartItem.id,
@@ -392,11 +409,13 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
                     >
                       <Minus className="size-3.5" />
                     </button>
-                    <span className="w-8 text-center text-sm">{cartItem.quantity}</span>
+                    <span className="w-8 text-center text-sm" aria-live="polite">
+                      {cartItem.quantity}
+                    </span>
                     <button
                       type="button"
                       aria-label="Lisää"
-                      className="flex h-full w-8 items-center justify-center text-muted-foreground hover:text-foreground"
+                      className="tap-target flex h-full w-8 items-center justify-center text-muted-foreground hover:text-foreground"
                       onClick={() =>
                         cartStore.setQuantity(
                           cartItem.id,
@@ -416,7 +435,7 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
                   <button
                     type="button"
                     aria-label="Poista korista"
-                    className="ml-auto text-muted-foreground transition-colors hover:text-destructive"
+                    className="tap-target ml-auto flex items-center justify-center text-muted-foreground transition-colors hover:text-destructive"
                     onClick={() => cartStore.remove(cartItem.id, cartItem.variantId)}
                   >
                     <Trash2 className="size-4" />
@@ -539,6 +558,17 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
             )}
           </div>
         ))}
+        {catalogError && (
+          <div
+            role="alert"
+            className="flex items-center justify-between gap-3 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            <span>{catalogError}</span>
+            <Button type="button" variant="outline" size="sm" onClick={loadCatalog}>
+              Yritä uudelleen
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Summary */}
@@ -638,8 +668,16 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
+              onBlur={() => setEmailTouched(true)}
               placeholder={deferredCheckout ? 'vanhempi@example.com' : 'etunimi@example.com'}
+              aria-invalid={showEmailError || undefined}
+              aria-describedby={showEmailError ? 'email-error' : undefined}
             />
+            {showEmailError && (
+              <p id="email-error" className="text-xs text-destructive" aria-live="polite">
+                Anna kelvollinen sähköpostiosoite.
+              </p>
+            )}
           </div>
         </div>
 

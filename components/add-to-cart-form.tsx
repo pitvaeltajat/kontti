@@ -1,32 +1,40 @@
 'use client';
 
 import { useState } from 'react';
-import { Minus, Plus } from 'lucide-react';
+import { ArrowRight, Minus, Plus } from 'lucide-react';
 import { cartStore } from '@/lib/cart';
 import { cn } from '@/lib/cn';
 import { formatCents } from '@/lib/money';
 import { Button } from '@/components/ui/button';
+import { ButtonLink } from '@/components/ui/button-link';
 
 export function AddToCartForm({
   itemId,
   variants = [],
   withQuantity = false,
   disabled = false,
+  disabledLabel,
   className,
 }: {
   itemId: string;
   variants?: { id: string; name: string | null; priceCents: number }[];
   withQuantity?: boolean;
   disabled?: boolean;
+  disabledLabel?: string;
   className?: string;
 }) {
   const [quantity, setQuantity] = useState(1);
-  const [variantId, setVariantId] = useState(variants[0]?.id ?? '');
+  const [variantId, setVariantId] = useState(
+    () =>
+      variants.reduce((min, v) => (v.priceCents < min.priceCents ? v : min), variants[0])?.id ?? '',
+  );
   const [added, setAdded] = useState(false);
+  const [hasAdded, setHasAdded] = useState(false);
 
   function handleAdd() {
     cartStore.add(itemId, quantity, variantId || undefined);
     setAdded(true);
+    setHasAdded(true);
     window.setTimeout(() => setAdded(false), 1500);
   }
 
@@ -53,7 +61,7 @@ export function AddToCartForm({
           <button
             type="button"
             aria-label="Vähennä määrää"
-            className="flex h-full w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+            className="tap-target flex h-full w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setQuantity((q) => Math.max(1, q - 1))}
           >
             <Minus className="size-4" />
@@ -64,16 +72,27 @@ export function AddToCartForm({
           <button
             type="button"
             aria-label="Lisää määrää"
-            className="flex h-full w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
+            className="tap-target flex h-full w-10 items-center justify-center text-muted-foreground transition-colors hover:text-foreground"
             onClick={() => setQuantity((q) => Math.min(99, q + 1))}
           >
             <Plus className="size-4" />
           </button>
         </div>
       )}
-      <Button type="button" disabled={disabled} onClick={handleAdd} className="min-w-44">
-        {added ? 'Lisätty koriin' : 'Lisää ostoskoriin'}
+      <Button
+        type="button"
+        disabled={disabled}
+        onClick={handleAdd}
+        className="min-w-44"
+        aria-live="polite"
+      >
+        {disabled && disabledLabel ? disabledLabel : added ? 'Lisätty koriin' : 'Lisää ostoskoriin'}
       </Button>
+      {hasAdded && (
+        <ButtonLink href="/cart" variant="outline">
+          Siirry ostoskoriin <ArrowRight />
+        </ButtonLink>
+      )}
     </div>
   );
 }

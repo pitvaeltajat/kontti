@@ -38,7 +38,11 @@ export function ItemImage({
       >
         {!loaded && !failed && <div className="absolute inset-0 animate-pulse bg-muted-foreground/10" />}
         {failed ? (
-          <div className="flex size-full items-center justify-center text-sm text-muted-foreground" aria-label={alt}>
+          <div
+            role="img"
+            className="flex size-full items-center justify-center text-sm text-muted-foreground"
+            aria-label={alt}
+          >
             Ei kuvaa
           </div>
         ) : (
@@ -62,6 +66,7 @@ export function ItemImage({
   }
   return (
     <div
+      role="img"
       className={cn(
         'flex aspect-square w-full items-center justify-center rounded-md bg-muted text-sm text-muted-foreground',
         className,

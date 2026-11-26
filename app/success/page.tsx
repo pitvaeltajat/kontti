@@ -7,6 +7,7 @@ import { ButtonLink } from '@/components/ui/button-link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ClearCartOnSuccess } from '@/components/clear-cart-on-success';
 import { ReceiptEmailForm } from '@/components/receipt-email-form';
+import { CopyableOrderRef } from '@/components/copyable-order-ref';
 
 export const metadata: Metadata = { title: 'Kiitos tilauksesta' };
 
@@ -84,10 +85,10 @@ export default async function SuccessPage({
           ) : order ? (
             <>
               <p className="text-sm text-muted-foreground">
-                {freeRegistration ? 'Ilmoittautuminen ' : 'Tilaus '}
-                <span className="font-medium text-foreground">
-                  #{order.id.slice(-8).toUpperCase()}
-                </span>{' '}
+                <CopyableOrderRef
+                  orderId={order.id}
+                  label={freeRegistration ? 'Ilmoittautumisnumero' : 'Tilausnumero'}
+                />{' '}
                 {freeRegistration
                   ? 'on vastaanotettu. Tapahtuma on maksuton, eikä maksuvälinettä tarvita.'
                   : 'on vastaanotettu. Maksu vahvistetaan hetken kuluttua ja kuitti lähetetään sähköpostiisi.'}

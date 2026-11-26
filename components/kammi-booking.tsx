@@ -75,6 +75,7 @@ export function KammiBooking({
   const [labels, setLabels] = useState(initialLabels);
   const [bookingIds, setBookingIds] = useState(initialBookingIds);
   const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
   const [tier, setTier] = useState<KammiTier>('OTHER');
@@ -103,6 +104,11 @@ export function KammiBooking({
     setError(null);
     setSelectionError(null);
     if (iso < today || iso >= windowEnd) return;
+    // Clicking the current start day again clears the selection.
+    if (start && !end && iso === start) {
+      resetSelection();
+      return;
+    }
     // Start (or restart) a selection.
     if (!start || end || iso <= start) {
       if (!nightFree(iso)) {
@@ -162,6 +168,8 @@ export function KammiBooking({
     [start, end, tier, prices],
   );
   const nights = start && end ? nightsBetween(start, end) : 0;
+  const weekendFlat = tier === 'SCOUT' ? prices.weekendScoutCents : prices.weekendOtherCents;
+  const weekdayRate = tier === 'SCOUT' ? prices.weekdayScoutCents : prices.weekdayOtherCents;
   // A logged-in pitva member's scout stay is free (the server enforces this too).
   const isFree = pitvaMember && tier === 'SCOUT';
   const forcedOrganization = pitvaMember && tier === 'SCOUT';
@@ -210,6 +218,7 @@ export function KammiBooking({
   // Fetch the next few months' availability and extend the calendar.
   async function loadMore() {
     setLoadingMore(true);
+    setLoadMoreError(null);
     const to = addDays(windowEnd, 6 * 31);
     try {
       const res = await fetch(`/api/kammi/availability?from=${windowEnd}&to=${to}`);
@@ -223,9 +232,11 @@ export function KammiBooking({
         setLabels((prev) => ({ ...prev, ...data.labels }));
         setBookingIds((prev) => ({ ...prev, ...data.bookingIds }));
         setWindowEnd(to);
+      } else {
+        setLoadMoreError('Kuukausien lataus epäonnistui. Yritä uudelleen.');
       }
     } catch {
-      // Leave the window as-is; the visitor can retry.
+      setLoadMoreError('Kuukausien lataus epäonnistui. Yritä uudelleen.');
     } finally {
       setLoadingMore(false);
     }
@@ -311,6 +322,10 @@ export function KammiBooking({
           </div>
         )}
 
+        <p className="mb-4 text-sm text-muted-foreground">
+          Vähintään {minNights} yötä, enintään {maxNights} yötä.
+        </p>
+
         <div className="grid gap-6 sm:grid-cols-2">
           {months.map(({ year, month, firstISO }) => {
             const lead = mondayIndex(firstISO);
@@ -383,10 +398,15 @@ export function KammiBooking({
           })}
         </div>
 
-        <div className="mt-6 flex justify-center">
+        <div className="mt-6 flex flex-col items-center gap-2">
           <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
             {loadingMore ? <LoadingPill /> : 'Näytä lisää kuukausia'}
           </Button>
+          {loadMoreError && (
+            <p role="alert" className="text-sm text-destructive">
+              {loadMoreError}
+            </p>
+          )}
         </div>
       </div>
 
@@ -399,14 +419,24 @@ export function KammiBooking({
 
         <div className="rounded-md bg-background p-3 text-sm">
           {start && end ? (
-            <>
-              <p>
-                <span className="text-muted-foreground">Tulo:</span> {fiDate(start)}
-              </p>
-              <p>
-                <span className="text-muted-foreground">Lähtö:</span> {fiDate(end)} ({nights} yötä)
-              </p>
-            </>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p>
+                  <span className="text-muted-foreground">Tulo:</span> {fiDate(start)}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Lähtö:</span> {fiDate(end)} ({nights}{' '}
+                  yötä)
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={resetSelection}
+                className="shrink-0 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-colors hover:bg-accent"
+              >
+                Tyhjennä valinta
+              </button>
+            </div>
           ) : start ? (
             <div className="space-y-2">
               <p className="text-muted-foreground">Valitse seuraavaksi lähtöpäivä.</p>
@@ -431,11 +461,13 @@ export function KammiBooking({
 
         <div className="space-y-1.5">
           <Label>Hinnoittelu</Label>
-          <div className="flex gap-2">
+          <div className="flex gap-2" role="radiogroup" aria-label="Hinnoittelu">
             {(['SCOUT', 'OTHER'] as const).map((t) => (
               <button
                 key={t}
                 type="button"
+                role="radio"
+                aria-checked={tier === t}
                 onClick={() => {
                   setTier(t);
                   if (t === 'SCOUT' && pitvaMember) setOrganization('PitVa');
@@ -446,25 +478,41 @@ export function KammiBooking({
                     : 'hover:bg-accent'
                 }`}
               >
-                {t === 'SCOUT' ? 'Partiolainen' : 'Muu'}
+                {t === 'SCOUT' ? 'Partiolainen' : 'Muu varaaja'}
               </button>
             ))}
           </div>
         </div>
 
         {price && (
-          <div className="flex items-center justify-between border-t pt-3 text-sm">
-            <span>Hinta</span>
-            {isFree ? (
-              <span className="text-lg font-bold text-success">Maksuton (partio)</span>
-            ) : (
-              <span className="text-lg font-bold">{formatCents(price.totalCents)}</span>
+          <div className="space-y-1 border-t pt-3 text-sm">
+            {!isFree && price.weekendNights > 0 && (
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>Viikonloppupaketti (pe–su)</span>
+                <span>{formatCents(weekendFlat)}</span>
+              </div>
             )}
+            {!isFree && price.weekdayNights > 0 && (
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>
+                  {price.weekdayNights} arkiyö(tä) × {formatCents(weekdayRate)} =
+                </span>
+                <span>{formatCents(price.weekdayNights * weekdayRate)}</span>
+              </div>
+            )}
+            <div className="flex items-center justify-between font-bold">
+              <span>Hinta yhteensä</span>
+              {isFree ? (
+                <span className="text-lg font-bold text-success">Maksuton (PitVa-jäsen)</span>
+              ) : (
+                <span className="text-lg font-bold">{formatCents(price.totalCents)}</span>
+              )}
+            </div>
           </div>
         )}
         {pitvaMember && (
           <p className="text-xs text-muted-foreground">
-            PitVa-jäsenille partiotoiminnan varaus on maksuton. Muu käyttö normaalihintaan.
+            PitVa-jäsenen partiolaisvaraus on maksuton. Muille partiolaisille alennettu hinta.
           </p>
         )}
 
@@ -532,7 +580,7 @@ export function KammiBooking({
             />
           </div>
           <div className="space-y-1.5">
-            <Label htmlFor="k-bill">Laskutusosoite / sähköposti (valinnainen)</Label>
+            <Label htmlFor="k-bill">Laskutussähköposti (valinnainen)</Label>
             <Input
               id="k-bill"
               type="email"
@@ -575,7 +623,12 @@ export function KammiBooking({
         </div>
 
         {error && (
-          <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</p>
+          <p
+            role="alert"
+            className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
+          >
+            {error}
+          </p>
         )}
 
         <Button

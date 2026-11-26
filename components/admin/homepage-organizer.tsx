@@ -37,7 +37,9 @@ export function HomepageOrganizer({
   const [dragged, setDragged] = useState<OrganizerItem | null>(null);
   const [draggedFrom, setDraggedFrom] = useState<'featured' | 'category' | null>(null);
   const [pending, startTransition] = useTransition();
-  const eventCategoryId = categories.find((category) => category.slug === 'tapahtumat')?.id;
+  const eventCategoryId =
+    categories.find((category) => category.items.some((item) => item.isEvent))?.id ??
+    categories.find((category) => category.slug === 'tapahtumat')?.id;
 
   function canDrag(item: OrganizerItem) {
     return canReorderProducts || item.categoryId === eventCategoryId;
@@ -157,45 +159,48 @@ export function HomepageOrganizer({
       </section>
 
       <section className="space-y-10 pb-8">
-        {groups.map((category) => (
-          <div key={category.id}>
-            <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-              <h2 className="text-xl font-bold">{category.name}</h2>
-              <div className="flex flex-wrap items-center gap-3">
-                {category.slug === 'tapahtumat' && (
-                  <ButtonLink href="/admin/events/new" variant="outline" size="sm">
-                    <Plus /> Lisää tapahtuma
-                  </ButtonLink>
+        {groups.map((category) => {
+          const isEventCategory = category.items.some((item) => item.isEvent);
+          return (
+            <div key={category.id}>
+              <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
+                <h2 className="text-xl font-bold">{category.name}</h2>
+                <div className="flex flex-wrap items-center gap-3">
+                  {isEventCategory && (
+                    <ButtonLink href="/admin/events/new" variant="outline" size="sm">
+                      <Plus /> Lisää tapahtuma
+                    </ButtonLink>
+                  )}
+                  <Link
+                    href={`/category/${category.slug}`}
+                    className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                  >
+                    Kaikki tuotteet <ArrowRight className="size-4" />
+                  </Link>
+                </div>
+              </div>
+              <div
+                className={cn(
+                  isEventCategory
+                    ? 'grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4'
+                    : 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4',
+                  pending && 'opacity-70',
                 )}
-                <Link
-                  href={`/category/${category.slug}`}
-                  className="flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-                >
-                  Kaikki tuotteet <ArrowRight className="size-4" />
-                </Link>
+                onDragOver={(event) => event.preventDefault()}
+                onDrop={() => dropOnCategory(category.id)}
+              >
+                {category.items.map((item) =>
+                  renderItem(
+                    item,
+                    () => dropOnCategory(category.id, item.id),
+                    false,
+                    isEventCategory,
+                  ),
+                )}
               </div>
             </div>
-            <div
-              className={cn(
-                category.slug === 'tapahtumat'
-                  ? 'grid grid-cols-1 gap-3 sm:grid-cols-3 sm:gap-4 lg:grid-cols-4'
-                  : 'grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4',
-                pending && 'opacity-70',
-              )}
-              onDragOver={(event) => event.preventDefault()}
-              onDrop={() => dropOnCategory(category.id)}
-            >
-              {category.items.map((item) =>
-                renderItem(
-                  item,
-                  () => dropOnCategory(category.id, item.id),
-                  false,
-                  category.slug === 'tapahtumat',
-                ),
-              )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </section>
     </>
   );
