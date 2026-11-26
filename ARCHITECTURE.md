@@ -35,11 +35,13 @@ Category 1──n Item 1──n OrderLine n──1 Order
    invoice with a 14-day due date, then shows hosted-invoice and PDF links on
    the confirmation page. The cart is cleared after either flow is accepted.
 4. `POST /api/webhooks/stripe` (signature-verified):
-   - `payment_intent.succeeded` (or legacy `checkout.session.completed`) →
-     `markOrderPaid`: RECEIVED → PAID, sets
-     `paidAt`, `stripePaymentIntent` and backfills available email/name,
-     then decrements stock per line (`lib/orders.ts`, floors at 0, leaves
-     `null` stock alone). Idempotent (`PAID`/`COMPLETED` orders are skipped).
+   - `checkout.session.completed` (when already paid),
+     `checkout.session.async_payment_succeeded` (bank redirects settle later),
+     or `payment_intent.succeeded` (fallback) → `markOrderPaid`: RECEIVED →
+     PAID, sets `paidAt`, `stripeSessionId` and backfills available
+     email/name, then decrements stock per line (`lib/orders.ts`, floors at 0,
+     leaves `null` stock alone). Idempotent (`PAID`/`COMPLETED` orders are
+     skipped).
    - `checkout.session.expired` → cancels a still-RECEIVED order.
    - `invoice.paid` → marks an invoiced event registration PAID and decrements
      stock.

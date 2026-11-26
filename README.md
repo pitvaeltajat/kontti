@@ -109,7 +109,8 @@ project:
   embedded Payment Element
 - `STRIPE_WEBHOOK_SECRET`: from Dashboard → Developers → Webhooks (register
   `https://kontti.pitva.fi/api/webhooks/stripe`, events
-  `checkout.session.completed`, `checkout.session.expired`,
+  `checkout.session.completed`, `checkout.session.async_payment_succeeded`,
+  `checkout.session.async_payment_failed`, `checkout.session.expired`,
   `payment_intent.succeeded`, and `invoice.paid`)
 - `KAMMI_CALENDAR_ID`: optional Google Calendar ID used for Kammi availability
 - `KAMMI_CALENDAR_WRITE_ENABLED="true"`: explicitly enable writing new Kammi

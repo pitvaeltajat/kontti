@@ -42,8 +42,8 @@ export default async function SuccessPage({
   const paymentFailed =
     redirectStatus === 'failed' ||
     redirectStatus === 'canceled' ||
-    stripeSession?.payment_status === 'unpaid' ||
-    stripeSession?.status === 'expired';
+    stripeSession?.status === 'expired' ||
+    (stripeSession?.payment_status === 'unpaid' && stripeSession?.status !== 'complete');
   const paymentSucceeded = !paymentFailed && stripeSession?.payment_status === 'paid';
   const freeRegistration = Boolean(orderId && order?.status === 'PAID' && order.totalCents === 0);
   const registrationSucceeded = paymentSucceeded || freeRegistration;
