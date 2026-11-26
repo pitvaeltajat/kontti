@@ -26,6 +26,9 @@ next-env.d.ts
 .claude/worktrees/
 .opencode/
 
+# design prototypes (never commit)
+design/
+
 # logs
 logs/
 *.log
