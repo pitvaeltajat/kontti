@@ -2,6 +2,7 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { formatCents } from '@/lib/money';
 import {
   addDays,
@@ -45,6 +46,26 @@ function fiDate(iso: string): string {
   return `${Number(d)}.${Number(m)}.${y}`;
 }
 
+type MonthRef = { year: number; month: number };
+
+function monthOf(iso: string): MonthRef {
+  const [year, month] = iso.split('-').map(Number);
+  return { year, month };
+}
+
+function addMonths({ year, month }: MonthRef, delta: number): MonthRef {
+  const index = year * 12 + (month - 1) + delta;
+  return { year: Math.floor(index / 12), month: ((index % 12) + 12) % 12 + 1 };
+}
+
+function monthNumber({ year, month }: MonthRef): number {
+  return year * 12 + (month - 1);
+}
+
+function firstISOOf({ year, month }: MonthRef): string {
+  return `${year}-${String(month).padStart(2, '0')}-01`;
+}
+
 export function KammiBooking({
   today,
   windowEnd: initialWindowEnd,
@@ -77,6 +98,7 @@ export function KammiBooking({
   const [bookingIds, setBookingIds] = useState(initialBookingIds);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
+  const [viewStart, setViewStart] = useState<MonthRef>(() => monthOf(today));
   const [start, setStart] = useState<string | null>(null);
   const [end, setEnd] = useState<string | null>(null);
   const [tier, setTier] = useState<KammiTier>('OTHER');
@@ -217,7 +239,7 @@ export function KammiBooking({
   }
 
   // Fetch the next few months' availability and extend the calendar.
-  async function loadMore() {
+  async function loadMore(): Promise<boolean> {
     setLoadingMore(true);
     setLoadMoreError(null);
     const to = addDays(windowEnd, 6 * 31);
@@ -233,33 +255,39 @@ export function KammiBooking({
         setLabels((prev) => ({ ...prev, ...data.labels }));
         setBookingIds((prev) => ({ ...prev, ...data.bookingIds }));
         setWindowEnd(to);
-      } else {
-        setLoadMoreError('Kuukausien lataus epäonnistui. Yritä uudelleen.');
+        return true;
       }
+      setLoadMoreError('Kuukausien lataus epäonnistui. Yritä uudelleen.');
+      return false;
     } catch {
       setLoadMoreError('Kuukausien lataus epäonnistui. Yritä uudelleen.');
+      return false;
     } finally {
       setLoadingMore(false);
     }
   }
 
-  // Build the list of months to render, from today's month to windowEnd.
-  const months = useMemo(() => {
-    const out: { year: number; month: number; firstISO: string }[] = [];
-    const [ty, tm] = today.split('-').map(Number);
-    const [ey, em] = windowEnd.split('-').map(Number);
-    let y = ty;
-    let m = tm;
-    while (y < ey || (y === ey && m <= em)) {
-      out.push({ year: y, month: m, firstISO: `${y}-${String(m).padStart(2, '0')}-01` });
-      m += 1;
-      if (m > 12) {
-        m = 1;
-        y += 1;
-      }
+  // The two-month viewport: [viewStart, viewStart + 1].
+  const secondMonth = addMonths(viewStart, 1);
+  const prevDisabled = monthNumber(viewStart) <= monthNumber(monthOf(today));
+
+  function showPrev() {
+    if (prevDisabled) return;
+    setLoadMoreError(null);
+    setViewStart((current) => addMonths(current, -1));
+  }
+
+  async function showNext() {
+    if (loadingMore) return;
+    setLoadMoreError(null);
+    const nextStart = addMonths(viewStart, 1);
+    // The second month of the next view is beyond what we've loaded: fetch first.
+    if (monthNumber(addMonths(nextStart, 1)) > monthNumber(monthOf(windowEnd))) {
+      const ok = await loadMore();
+      if (!ok) return;
     }
-    return out;
-  }, [today, windowEnd]);
+    setViewStart(nextStart);
+  }
 
   function dayCellStyle(iso: string): React.CSSProperties {
     const inRange = !!(start && ((end && iso >= start && iso < end) || iso === start));
@@ -327,12 +355,52 @@ export function KammiBooking({
           Vähintään {minNights} yötä, enintään {maxNights} yötä.
         </p>
 
+        <div className="mb-3 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={showPrev}
+            disabled={prevDisabled}
+            aria-label="Edelliset kuukaudet"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border bg-card text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-40"
+          >
+            <ChevronLeft className="size-4" aria-hidden="true" />
+          </button>
+          <p className="text-center text-sm font-semibold capitalize" aria-live="polite">
+            {MONTHS[viewStart.month - 1]} {viewStart.year}
+            <span className="hidden sm:inline">
+              {' '}
+              · {MONTHS[secondMonth.month - 1]} {secondMonth.year}
+            </span>
+          </p>
+          <button
+            type="button"
+            onClick={showNext}
+            disabled={loadingMore}
+            aria-label="Seuraavat kuukaudet"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg border bg-card text-foreground transition-colors hover:bg-accent disabled:pointer-events-none disabled:opacity-40"
+          >
+            {loadingMore ? (
+              <Loader2 className="size-4 animate-spin" aria-hidden="true" />
+            ) : (
+              <ChevronRight className="size-4" aria-hidden="true" />
+            )}
+          </button>
+        </div>
+
+        {loadMoreError && (
+          <p role="alert" className="mb-3 text-center text-sm text-destructive">
+            {loadMoreError}
+          </p>
+        )}
+
         <div className="grid gap-6 sm:grid-cols-2">
-          {months.map(({ year, month, firstISO }) => {
+          {[viewStart, secondMonth].map((monthRef, index) => {
+            const { year, month } = monthRef;
+            const firstISO = firstISOOf(monthRef);
             const lead = mondayIndex(firstISO);
             const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
             return (
-              <div key={firstISO}>
+              <div key={firstISO} className={index === 1 ? 'hidden sm:block' : undefined}>
                 <p className="mb-2 text-sm font-semibold capitalize">
                   {MONTHS[month - 1]} {year}
                 </p>
@@ -397,17 +465,6 @@ export function KammiBooking({
               </div>
             );
           })}
-        </div>
-
-        <div className="mt-6 flex flex-col items-center gap-2">
-          <Button variant="outline" onClick={loadMore} disabled={loadingMore}>
-            {loadingMore ? <LoadingPill /> : 'Näytä lisää kuukausia'}
-          </Button>
-          {loadMoreError && (
-            <p role="alert" className="text-sm text-destructive">
-              {loadMoreError}
-            </p>
-          )}
         </div>
       </div>
 

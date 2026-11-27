@@ -6,6 +6,9 @@
 
 const MS_PER_DAY = 86_400_000;
 
+/** How long a Stripe checkout hold keeps the dates reserved before it lapses. */
+export const HOLD_MINUTES = 30;
+
 /** A Date (or Prisma @db.Date) to 'YYYY-MM-DD' in UTC. */
 export function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);

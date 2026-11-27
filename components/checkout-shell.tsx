@@ -17,6 +17,8 @@ import { Button } from '@/components/ui/button';
 import { ButtonLink } from '@/components/ui/button-link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { LoadingPill } from '@/components/ui/loading-pill';
+import { StickySummaryBar } from '@/components/sticky-summary-bar';
+import { TrustCard } from '@/components/trust-card';
 
 const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY;
 const stripePromise = stripePublishableKey ? loadStripe(stripePublishableKey) : null;
@@ -158,11 +160,22 @@ export function CheckoutShell({ orderId }: { orderId: string | null }) {
 
   if (!data) return null;
 
+  function scrollToPayment() {
+    document.getElementById('payment')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
   return (
-    <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_400px]">
-      <OrderSummary data={data} />
-      <PaymentSection data={data} />
-    </div>
+    <>
+      <div className="grid gap-6 pb-24 lg:grid-cols-[minmax(0,1fr)_400px] lg:pb-0">
+        <OrderSummary data={data} />
+        <PaymentSection data={data} />
+      </div>
+      <StickySummaryBar
+        totalCents={data.totalCents}
+        ctaLabel="Siirry maksamaan"
+        onCta={scrollToPayment}
+      />
+    </>
   );
 }
 
@@ -234,8 +247,12 @@ function OrderSummary({ data }: { data: PaymentData }) {
 
 function PaymentSection({ data }: { data: PaymentData }) {
   return (
-    <div className="h-fit space-y-4 rounded-lg border bg-card p-4 shadow-sm sm:p-5">
+    <div
+      id="payment"
+      className="h-fit scroll-mt-20 space-y-4 rounded-lg border bg-card p-4 shadow-sm sm:p-5"
+    >
       <h2 className="text-lg font-bold">Maksaminen</h2>
+      <TrustCard />
       {!stripePromise ? (
         <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
           Verkkomaksaminen ei ole juuri nyt käytössä.
@@ -248,7 +265,14 @@ function PaymentSection({ data }: { data: PaymentData }) {
             elementsOptions: {
               appearance: {
                 theme: 'stripe',
-                variables: { colorPrimary: 'hsl(244, 51%, 24%)', borderRadius: '6px' },
+                variables: {
+                  colorPrimary: 'hsl(244, 51%, 24%)',
+                  colorText: 'hsl(244, 51%, 24%)',
+                  colorDanger: 'hsl(2, 50%, 42%)',
+                  colorBackground: '#ffffff',
+                  borderRadius: '4px',
+                  fontFamily: 'inherit',
+                },
               },
             },
           }}

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getStripe } from '@/lib/stripe';
-import { toISODate } from '@/lib/kammi';
+import { getStripe, CHECKOUT_PAYMENT_METHOD_TYPES } from '@/lib/stripe';
+import { HOLD_MINUTES, toISODate } from '@/lib/kammi';
 
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
@@ -28,6 +28,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   const session = await stripe.checkout.sessions.create(
     {
       mode: 'payment',
+      allowed_payment_method_types: [...CHECKOUT_PAYMENT_METHOD_TYPES],
       line_items: [
         {
           quantity: 1,
@@ -45,7 +46,7 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
       success_url: `${appUrl}/kammi/kiitos?status=paid`,
       cancel_url: `${appUrl}/kammi/pay/${encodeURIComponent(token)}`,
       locale: 'fi',
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+      expires_at: Math.floor(Date.now() / 1000) + HOLD_MINUTES * 60,
     },
     { idempotencyKey: `kammi-payment:${booking.id}:${Date.now()}` },
   );

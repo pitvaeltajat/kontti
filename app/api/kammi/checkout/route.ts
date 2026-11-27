@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, CHECKOUT_PAYMENT_METHOD_TYPES } from '@/lib/stripe';
 import { auth } from '@/lib/auth';
 import { getUserRole, isEventAdmin } from '@/lib/admin';
 import { createKammiHold } from '@/lib/kammiBookings';
@@ -10,7 +10,7 @@ import {
   sendKammiConfirmationEmail,
   sendKammiHostNotificationEmail,
 } from '@/lib/emails';
-import { toISODate, type KammiTier } from '@/lib/kammi';
+import { HOLD_MINUTES, toISODate, type KammiTier } from '@/lib/kammi';
 
 /**
  * Reserve a kammi hold for the chosen dates and open a Stripe Checkout Session.
@@ -150,6 +150,7 @@ export async function POST(req: Request) {
     const session = await stripe.checkout.sessions.create(
       {
         mode: 'payment',
+        allowed_payment_method_types: [...CHECKOUT_PAYMENT_METHOD_TYPES],
         line_items: [
           {
             quantity: 1,
@@ -165,7 +166,7 @@ export async function POST(req: Request) {
         success_url: `${appUrl}/kammi/kiitos?status=paid`,
         cancel_url: `${appUrl}/kammi`,
         locale: 'fi',
-        expires_at: Math.floor(Date.now() / 1000) + 30 * 60,
+        expires_at: Math.floor(Date.now() / 1000) + HOLD_MINUTES * 60,
       },
       { idempotencyKey: requestKey ?? `kammi-checkout:${booking.id}` },
     );

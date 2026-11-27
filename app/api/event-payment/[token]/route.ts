@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, CHECKOUT_PAYMENT_METHOD_TYPES } from '@/lib/stripe';
 
 /** Opens a Stripe Checkout Session for a child-created event registration. */
 export async function POST(req: Request, { params }: { params: Promise<{ token: string }> }) {
@@ -40,12 +40,16 @@ export async function POST(req: Request, { params }: { params: Promise<{ token: 
   if (order.stripeSessionId) {
     const session = await stripe.checkout.sessions.retrieve(order.stripeSessionId);
     if (session.client_secret)
-      return NextResponse.json({ clientSecret: session.client_secret, checkoutSessionId: session.id });
+      return NextResponse.json({
+        clientSecret: session.client_secret,
+        checkoutSessionId: session.id,
+      });
   }
   const session = await stripe.checkout.sessions.create(
     {
       mode: 'payment',
       ui_mode: 'elements',
+      allowed_payment_method_types: [...CHECKOUT_PAYMENT_METHOD_TYPES],
       line_items: order.lines.map((line) => ({
         quantity: line.quantity,
         price_data: {

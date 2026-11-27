@@ -4,6 +4,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { Copy, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { HoldCountdown } from '@/components/hold-countdown';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingPill } from '@/components/ui/loading-pill';
@@ -15,6 +16,7 @@ export function KammiPayment({
   end,
   nights,
   total,
+  holdExpiresAt,
 }: {
   token: string;
   name: string;
@@ -22,6 +24,7 @@ export function KammiPayment({
   end: string;
   nights: number;
   total: string;
+  holdExpiresAt?: string | null;
 }) {
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -77,10 +80,16 @@ export function KammiPayment({
             <p className="mt-2">Varaaja: {name}</p>
             <p className="mt-2 text-lg font-bold">{total}</p>
           </div>
-          <p className="text-sm text-muted-foreground">
-            Varaus on pidossa maksua varten. Jaa tämä maksuohje maksajalle. Varaus pysyy voimassa,
-            kunnes se maksetaan tai ylläpito peruu sen.
-          </p>
+          {/* Payer-separated holds are indefinite (holdExpiresAt: null), so the
+              countdown only appears if a hold deadline is ever set. */}
+          {holdExpiresAt ? (
+            <HoldCountdown expiresAt={holdExpiresAt} />
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              Varaus on pidossa maksua varten. Jaa tämä maksuohje maksajalle. Varaus pysyy voimassa,
+              kunnes se maksetaan tai ylläpito peruu sen.
+            </p>
+          )}
           <div className="grid gap-2 sm:grid-cols-2">
             <Button variant="cta" onClick={share}>
               <Share2 className="size-4" /> Jaa maksuohje

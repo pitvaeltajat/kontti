@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { randomUUID } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
-import { getStripe } from '@/lib/stripe';
+import { getStripe, CHECKOUT_PAYMENT_METHOD_TYPES } from '@/lib/stripe';
 import { buildCheckout, type CheckoutRequestItem } from '@/lib/checkout';
 import {
   validateAndBuildAnswers,
@@ -405,6 +405,7 @@ export async function POST(req: Request) {
       {
         mode: 'payment',
         ui_mode: 'elements',
+        allowed_payment_method_types: [...CHECKOUT_PAYMENT_METHOD_TYPES],
         line_items: result.lines.map((line) => ({
           quantity: line.quantity,
           price_data: {

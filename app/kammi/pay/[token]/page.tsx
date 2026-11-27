@@ -63,6 +63,7 @@ export default async function KammiPaymentPage({ params }: { params: Promise<{ t
       end={toISODate(booking.endDate)}
       nights={booking.nights}
       total={formatCents(booking.totalCents)}
+      holdExpiresAt={booking.holdExpiresAt?.toISOString() ?? null}
     />
   );
 }

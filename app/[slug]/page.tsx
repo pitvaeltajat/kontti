@@ -154,6 +154,8 @@ export default async function ItemPage({ params }: { params: Promise<{ slug: str
               itemId={item.id}
               name={item.name}
               variants={item.variants}
+              stock={item.stock}
+              isEvent={item.isEvent}
               withQuantity
               disabled={soldOut || registrationClosed}
               disabledLabel={registrationClosed ? 'Ilmoittautuminen päättynyt' : undefined}

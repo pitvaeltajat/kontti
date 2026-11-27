@@ -8,13 +8,11 @@ import {
   validateBookingDates,
   computeKammiPrice,
   rangeIsFree,
+  HOLD_MINUTES,
   type DateRange,
   type KammiTier,
 } from '@/lib/kammi';
 import { fetchKammiBusyRanges, createKammiEvent, deleteKammiEvent } from '@/lib/googleCalendar';
-
-/** How long a Stripe checkout hold keeps the dates reserved before it lapses. */
-const HOLD_MINUTES = 20;
 
 export const KAMMI_ACCOUNTING_CLASS_ID = 'income-3500';
 export const KAMMI_ACCOUNTING_CLASS_NAME = '3500 - Kammin vuokratuotot';
