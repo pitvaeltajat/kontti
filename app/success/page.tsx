@@ -8,8 +8,11 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { ClearCartOnSuccess } from '@/components/clear-cart-on-success';
 import { ReceiptEmailForm } from '@/components/receipt-email-form';
 import { CopyableOrderRef } from '@/components/copyable-order-ref';
+import { SuccessStatus } from '@/components/success-status';
 
 export const metadata: Metadata = { title: 'Kiitos tilauksesta' };
+
+type SuccessState = 'failed' | 'free' | 'optimistic' | 'no-params';
 
 export default async function SuccessPage({
   searchParams,
@@ -40,37 +43,53 @@ export default async function SuccessPage({
         .checkout.sessions.retrieve(sessionId)
         .catch(() => null)
     : null;
-  const paymentFailed =
+
+  const failed =
     redirectStatus === 'failed' ||
     redirectStatus === 'canceled' ||
     stripeSession?.status === 'expired' ||
     (stripeSession?.payment_status === 'unpaid' && stripeSession?.status !== 'complete');
-  const paymentSucceeded = !paymentFailed && stripeSession?.payment_status === 'paid';
-  const freeRegistration = Boolean(orderId && order?.status === 'PAID' && order.totalCents === 0);
-  const registrationSucceeded = paymentSucceeded || freeRegistration;
+  const free = Boolean(orderId && order?.status === 'PAID' && order.totalCents === 0);
+  const optimistic =
+    !failed &&
+    order?.status !== 'CANCELLED' &&
+    (stripeSession?.payment_status === 'paid' ||
+      redirectStatus === 'succeeded' ||
+      Boolean(order?.stripeSessionId));
+
+  const state: SuccessState = failed
+    ? 'failed'
+    : free
+      ? 'free'
+      : optimistic
+        ? 'optimistic'
+        : 'no-params';
+
   const isEventOrder = order?.lines.some((line) => line.item.isEvent) ?? false;
 
   return (
     <div className="container flex justify-center py-12">
       <Card className="w-full max-w-xl">
         <CardHeader className="items-center text-center">
-          {paymentFailed ? (
+          {state === 'failed' ? (
             <>
               <AlertCircle className="size-12 text-destructive" />
               <CardTitle>Maksu ei onnistunut</CardTitle>
             </>
+          ) : state === 'no-params' ? (
+            <CardTitle>Maksun tila</CardTitle>
           ) : (
             <>
               <CheckCircle2 className="size-12 text-success" />
               <CardTitle>
-                {freeRegistration ? 'Ilmoittautuminen vastaanotettu!' : 'Kiitos tilauksesta!'}
+                {state === 'free' ? 'Ilmoittautuminen vastaanotettu!' : 'Kiitos tilauksesta!'}
               </CardTitle>
             </>
           )}
         </CardHeader>
         <CardContent className="space-y-4">
-          {registrationSucceeded && <ClearCartOnSuccess />}
-          {paymentFailed ? (
+          {order && state !== 'failed' && <ClearCartOnSuccess />}
+          {state === 'failed' ? (
             <>
               <p className="text-sm text-muted-foreground">
                 Maksua ei veloitettu. Voit palata ostoskoriin ja yrittää uudelleen toisella
@@ -81,70 +100,92 @@ export default async function SuccessPage({
                   Palaa ostoskoriin
                 </ButtonLink>
               </div>
-            </>
-          ) : order ? (
-            <>
-              <p className="text-sm text-muted-foreground">
-                <CopyableOrderRef
-                  orderId={order.id}
-                  label={freeRegistration ? 'Ilmoittautumisnumero' : 'Tilausnumero'}
-                />{' '}
-                {freeRegistration
-                  ? 'on vastaanotettu. Tapahtuma on maksuton, eikä maksuvälinettä tarvita.'
-                  : 'on vastaanotettu. Maksu vahvistetaan hetken kuluttua ja kuitti lähetetään sähköpostiisi.'}
+              <p className="text-center text-xs text-muted-foreground">
+                Jos maksu kuitenkin veloitettiin, ota yhteyttä:{' '}
+                <span className="whitespace-nowrap">info@pitkajarvenvaeltajat.fi</span>.
               </p>
-              {!order.email && order.status === 'PAID' && sessionId && (
+            </>
+          ) : state === 'no-params' ? (
+            <p className="text-sm text-muted-foreground">
+              Tällä sivulla näkyy tilausvahvistus maksun jälkeen. Jos sinut ohjattiin tänne maksun
+              jälkeen, ota yhteyttä: info@pitkajarvenvaeltajat.fi.
+            </p>
+          ) : (
+            <>
+              {order && (
+                <p className="text-sm text-muted-foreground">
+                  <CopyableOrderRef
+                    orderId={order.id}
+                    label={state === 'free' ? 'Ilmoittautumisnumero' : 'Tilausnumero'}
+                  />{' '}
+                  {state === 'free'
+                    ? 'on vastaanotettu. Tapahtuma on maksuton, eikä maksuvälinettä tarvita.'
+                    : 'on vastaanotettu.'}
+                </p>
+              )}
+              <SuccessStatus
+                sessionId={sessionId}
+                orderId={orderId}
+                initialStatus={order?.status}
+                optimisticPaid={state === 'optimistic'}
+                freeRegistration={state === 'free'}
+              />
+              {order && !order.email && order.status === 'PAID' && sessionId && (
                 <ReceiptEmailForm sessionId={sessionId} />
               )}
-              <div className="divide-y rounded-md border">
-                {order.lines.map((line) => {
-                  const answers = Array.isArray(line.answers)
-                    ? (line.answers as {
-                        questionId: string;
-                        prompt?: string;
-                        answer?: string | string[];
-                      }[])
-                    : [];
-                  return (
-                    <div key={line.id} className="px-4 py-2 text-sm">
-                      <div className="flex items-baseline justify-between gap-3">
-                        <span className="min-w-0">
-                          {line.name}{' '}
-                          <span className="text-muted-foreground">× {line.quantity}</span>
-                        </span>
-                        <span className="shrink-0 font-medium">
-                          {formatCents(line.priceCents * line.quantity)}
-                        </span>
+              {order?.email &&
+                (order.status === 'PAID' || order.status === 'COMPLETED') &&
+                state !== 'free' && (
+                  <p className="text-xs text-muted-foreground">
+                    Kuitti on lähetetty sähköpostiisi. Jos kuittia ei kuulu, tarkista roskaposti.
+                  </p>
+                )}
+              {order && (
+                <div className="divide-y rounded-md border">
+                  {order.lines.map((line) => {
+                    const answers = Array.isArray(line.answers)
+                      ? (line.answers as {
+                          questionId: string;
+                          prompt?: string;
+                          answer?: string | string[];
+                        }[])
+                      : [];
+                    return (
+                      <div key={line.id} className="px-4 py-2 text-sm">
+                        <div className="flex items-baseline justify-between gap-3">
+                          <span className="min-w-0">
+                            {line.name}{' '}
+                            <span className="text-muted-foreground">× {line.quantity}</span>
+                          </span>
+                          <span className="shrink-0 font-medium">
+                            {formatCents(line.priceCents * line.quantity)}
+                          </span>
+                        </div>
+                        {answers.length > 0 && (
+                          <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
+                            {answers.map((answer) => (
+                              <li key={answer.questionId}>
+                                {answer.prompt}:{' '}
+                                {Array.isArray(answer.answer)
+                                  ? answer.answer.join(', ')
+                                  : answer.answer}
+                              </li>
+                            ))}
+                          </ul>
+                        )}
                       </div>
-                      {answers.length > 0 && (
-                        <ul className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                          {answers.map((answer) => (
-                            <li key={answer.questionId}>
-                              {answer.prompt}:{' '}
-                              {Array.isArray(answer.answer)
-                                ? answer.answer.join(', ')
-                                : answer.answer}
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  );
-                })}
-                <div className="flex items-baseline justify-between gap-3 px-4 py-2 text-sm font-bold">
-                  <span>Yhteensä</span>
-                  <span>{formatCents(order.totalCents)}</span>
+                    );
+                  })}
+                  <div className="flex items-baseline justify-between gap-3 px-4 py-2 text-sm font-bold">
+                    <span>Yhteensä</span>
+                    <span>{formatCents(order.totalCents)}</span>
+                  </div>
                 </div>
-              </div>
+              )}
             </>
-          ) : (
-            <p className="text-sm text-muted-foreground">
-              Maksun tilaa ei voitu varmistaa. Jos rahaa veloitettiin, ota yhteyttä:
-              info@pitkajarvenvaeltajat.fi.
-            </p>
           )}
 
-          {!paymentFailed && order && (
+          {state !== 'failed' && order && (
             <div className="rounded-md bg-accent/60 px-4 py-3 text-xs text-muted-foreground">
               {isEventOrder
                 ? 'Tapahtumatuotteen ostaminen vahvisti ilmoittautumisen. Saat tapahtuman tarkemmat ohjeet erikseen.'
@@ -152,7 +193,7 @@ export default async function SuccessPage({
             </div>
           )}
 
-          {!paymentFailed && (
+          {state !== 'failed' && (
             <div className="flex justify-center gap-3 pt-2">
               <ButtonLink href="/" variant="cta">
                 Takaisin tuotteisiin
