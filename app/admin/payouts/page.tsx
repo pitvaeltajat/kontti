@@ -1,10 +1,9 @@
 import type { Metadata } from 'next';
-import { format } from 'date-fns';
-import { fi } from 'date-fns/locale';
+import { Wallet } from 'lucide-react';
 import { getStripe } from '@/lib/stripe';
-import { formatCents } from '@/lib/money';
 import { requireSuperAdmin } from '@/lib/admin-guard';
-import { Badge } from '@/components/ui/badge';
+import { EmptyState } from '@/components/ui/empty-state';
+import { PayoutsList, type PayoutRow } from '@/components/admin/payouts-list';
 
 export const metadata: Metadata = { title: 'Tilitykset' };
 
@@ -13,35 +12,6 @@ export const metadata: Metadata = { title: 'Tilitykset' };
 // downloadable accounting CSVs). Each payout is one deposit that lands in Holvi;
 // its balance transactions break it down into gross sales, Stripe fees and
 // refunds so the treasurer can reconcile the lump-sum deposit.
-
-const STATUS_META: Record<
-  string,
-  { label: string; variant: 'default' | 'success' | 'warning' | 'destructive' | 'secondary' }
-> = {
-  paid: { label: 'Maksettu', variant: 'success' },
-  in_transit: { label: 'Matkalla', variant: 'warning' },
-  pending: { label: 'Odottaa', variant: 'warning' },
-  canceled: { label: 'Peruttu', variant: 'secondary' },
-  failed: { label: 'Epäonnistui', variant: 'destructive' },
-};
-
-type PayoutRow = {
-  id: string;
-  arrivalDate: Date;
-  status: string;
-  descriptor: string | null;
-  grossCents: number;
-  feeCents: number;
-  refundCents: number;
-  netCents: number;
-  lines: {
-    id: string;
-    description: string;
-    grossCents: number;
-    feeCents: number;
-    netCents: number;
-  }[];
-};
 
 async function loadPayouts(): Promise<
   { ok: true; rows: PayoutRow[] } | { ok: false; error: string }
@@ -78,7 +48,7 @@ async function loadPayouts(): Promise<
         }
         return {
           id: p.id,
-          arrivalDate: new Date(p.arrival_date * 1000),
+          arrivalDate: new Date(p.arrival_date * 1000).toISOString(),
           status: p.status,
           descriptor: p.statement_descriptor,
           grossCents,
@@ -112,85 +82,13 @@ export default async function AdminPayoutsPage() {
           {result.error}
         </p>
       ) : result.rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed bg-card px-4 py-10 text-center text-sm text-muted-foreground">
-          Ei tilityksiä. Testitilassa Stripe ei maksa tilityksiä pankkitilille.
-        </p>
+        <EmptyState
+          icon={<Wallet className="size-6" />}
+          title="Ei tilityksiä"
+          description="Testitilassa Stripe ei maksa tilityksiä pankkitilille."
+        />
       ) : (
-        <div className="space-y-3">
-          {result.rows.map((payout) => (
-            <div key={payout.id} className="rounded-lg border bg-card p-4 shadow-sm">
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="text-sm">
-                  <p className="font-semibold">
-                    {format(payout.arrivalDate, 'd.M.yyyy', { locale: fi })}
-                    {payout.descriptor && (
-                      <span className="ml-2 font-normal text-muted-foreground">
-                        {payout.descriptor}
-                      </span>
-                    )}
-                  </p>
-                  <p className="mt-0.5 text-muted-foreground">
-                    Brutto {formatCents(payout.grossCents)} · kulut {formatCents(payout.feeCents)}
-                    {payout.refundCents > 0 && (
-                      <> · palautukset {formatCents(payout.refundCents)}</>
-                    )}
-                  </p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <Badge variant={STATUS_META[payout.status]?.variant ?? 'secondary'}>
-                    {STATUS_META[payout.status]?.label ?? payout.status}
-                  </Badge>
-                  <span className="font-bold">{formatCents(payout.netCents)}</span>
-                </div>
-              </div>
-
-              {payout.lines.length > 0 && (
-                <details className="mt-3">
-                  <summary className="cursor-pointer text-sm text-muted-foreground hover:text-foreground">
-                    Tapahtumat ({payout.lines.length})
-                  </summary>
-                  <div className="mt-2 overflow-x-auto">
-                    <table className="w-full min-w-[520px] text-sm">
-                      <caption className="sr-only">Tilityksen tapahtumat</caption>
-                      <thead>
-                        <tr className="border-b text-left text-xs text-muted-foreground">
-                          <th scope="col" className="py-1 pr-3 font-medium">
-                            Tapahtuma
-                          </th>
-                          <th scope="col" className="py-1 px-3 text-right font-medium">
-                            Brutto
-                          </th>
-                          <th scope="col" className="py-1 px-3 text-right font-medium">
-                            Kulu
-                          </th>
-                          <th scope="col" className="py-1 pl-3 text-right font-medium">
-                            Netto
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {payout.lines.map((line) => (
-                          <tr key={line.id} className="border-b last:border-0">
-                            <td className="py-1 pr-3">{line.description}</td>
-                            <td className="py-1 px-3 text-right text-muted-foreground">
-                              {formatCents(line.grossCents)}
-                            </td>
-                            <td className="py-1 px-3 text-right text-muted-foreground">
-                              {formatCents(line.feeCents)}
-                            </td>
-                            <td className="py-1 pl-3 text-right font-medium">
-                              {formatCents(line.netCents)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </details>
-              )}
-            </div>
-          ))}
-        </div>
+        <PayoutsList rows={result.rows} />
       )}
     </div>
   );

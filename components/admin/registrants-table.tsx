@@ -1,11 +1,20 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type MouseEvent, type ReactNode } from 'react';
 import { format } from 'date-fns';
 import { fi } from 'date-fns/locale';
-import { ArrowDown, ArrowUp, ArrowUpDown, Download } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Download, SearchX, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/ui/empty-state';
+import { FilterBar } from '@/components/ui/filter-bar';
+import { Pagination } from '@/components/ui/pagination';
+import { StatusBadge } from '@/components/ui/status-badge';
+import {
+  compareRows,
+  DataTableBase,
+  type Column as DataTableColumn,
+  type SortState,
+} from '@/components/ui/data-table-base';
 import { buildXlsx, toCsv } from '@/lib/spreadsheet';
 
 export type RegistrantColumnKind = 'name' | 'email' | 'answer' | 'date' | 'status' | 'actions';
@@ -34,13 +43,34 @@ export type RegistrantRow = {
   participantRefundedAt: string | null;
 };
 
-type Sort = { key: string; direction: 'asc' | 'desc' };
+type RegistrantStatus = 'PAID' | 'RECEIVED' | 'CANCELLED' | 'REFUNDED';
+
+const PER_PAGE = 25;
+
+const STATUS_LABEL: Record<RegistrantStatus, string> = {
+  PAID: 'Maksettu',
+  RECEIVED: 'Lasku avoinna',
+  CANCELLED: 'Peruutettu',
+  REFUNDED: 'Hyvitetty',
+};
+
+const STATUS_OPTIONS = [
+  { label: 'Kaikki', value: '' },
+  { label: STATUS_LABEL.PAID, value: 'PAID' },
+  { label: STATUS_LABEL.RECEIVED, value: 'RECEIVED' },
+  { label: STATUS_LABEL.CANCELLED, value: 'CANCELLED' },
+  { label: STATUS_LABEL.REFUNDED, value: 'REFUNDED' },
+];
+
+export function registrantStatus(row: RegistrantRow): RegistrantStatus {
+  if (row.participantRefundedAt) return 'REFUNDED';
+  if (row.status === 'RECEIVED') return 'RECEIVED';
+  if (row.status === 'CANCELLED') return 'CANCELLED';
+  return 'PAID';
+}
 
 function statusLabel(row: RegistrantRow): string {
-  if (row.participantRefundedAt) return 'Hyvitetty';
-  if (row.status === 'RECEIVED') return 'Lasku avoinna';
-  if (row.status === 'CANCELLED') return 'Peruutettu';
-  return 'Maksettu';
+  return STATUS_LABEL[registrantStatus(row)];
 }
 
 function dateLabel(iso: string): string {
@@ -73,6 +103,14 @@ function exportValue(row: RegistrantRow, column: RegistrantColumn): string {
   return value(row, column);
 }
 
+function cellClassName(kind: RegistrantColumnKind): string | undefined {
+  if (kind === 'name') return 'font-medium';
+  if (kind === 'email' || kind === 'date' || kind === 'answer') {
+    return 'text-muted-foreground';
+  }
+  return undefined;
+}
+
 export function RegistrantsTable({
   rows,
   columns,
@@ -82,22 +120,87 @@ export function RegistrantsTable({
   rows: RegistrantRow[];
   columns: RegistrantColumn[];
   fileName: string;
-  renderActions?: (row: RegistrantRow) => React.ReactNode;
+  renderActions?: (row: RegistrantRow) => ReactNode;
 }) {
-  const [sort, setSort] = useState<Sort>({ key: 'createdAt', direction: 'asc' });
+  const [search, setSearch] = useState('');
+  const [status, setStatus] = useState('');
+  const [page, setPage] = useState(1);
+  const [sort, setSort] = useState<SortState>({ key: 'createdAt', direction: 'desc' });
+
+  const searchedRows = useMemo(() => {
+    const query = search.trim().toLocaleLowerCase('fi');
+    if (!query) return rows;
+    return rows.filter(
+      (row) =>
+        row.name.toLocaleLowerCase('fi').includes(query) ||
+        (row.email ?? '').toLocaleLowerCase('fi').includes(query) ||
+        row.orderId.toLocaleLowerCase('fi').includes(query),
+    );
+  }, [rows, search]);
+
+  const statusCounts = useMemo(() => {
+    const counts: Record<RegistrantStatus, number> = {
+      PAID: 0,
+      RECEIVED: 0,
+      CANCELLED: 0,
+      REFUNDED: 0,
+    };
+    for (const row of searchedRows) {
+      counts[registrantStatus(row)] += 1;
+    }
+    return counts;
+  }, [searchedRows]);
+
+  const filteredRows = useMemo(
+    () =>
+      status ? searchedRows.filter((row) => registrantStatus(row) === status) : searchedRows,
+    [searchedRows, status],
+  );
+
+  const dataColumns = useMemo<DataTableColumn<RegistrantRow>[]>(
+    () =>
+      columns.map((column) => {
+        if (column.kind === 'actions') {
+          return {
+            key: column.key,
+            header: 'Toiminnot',
+            align: 'right' as const,
+            cell: (row: RegistrantRow) => renderActions?.(row),
+          };
+        }
+        return {
+          key: column.key,
+          header: column.label,
+          sortable: true,
+          cell: (row: RegistrantRow) => {
+            if (column.kind === 'status') {
+              return <StatusBadge status={registrantStatus(row)} kind="registrant" />;
+            }
+            if (column.kind === 'email') return row.email ?? 'ei sähköpostia';
+            if (column.kind === 'date') return dateLabel(row.createdAt);
+            return value(row, column);
+          },
+          cellClassName: cellClassName(column.kind),
+          sortValue: (row: RegistrantRow) => value(row, column),
+        };
+      }),
+    [columns, renderActions],
+  );
 
   const sortedRows = useMemo(() => {
+    const column = dataColumns.find((candidate) => candidate.key === sort.key);
+    if (!column) return filteredRows;
     const direction = sort.direction === 'asc' ? 1 : -1;
-    const column = columns.find((candidate) => candidate.key === sort.key);
-    if (!column) return rows;
-    return [...rows].sort((a, b) => {
-      const result = value(a, column).localeCompare(value(b, column), 'fi', {
-        numeric: true,
-        sensitivity: 'base',
-      });
-      return result * direction;
-    });
-  }, [columns, rows, sort]);
+    return [...filteredRows].sort((a, b) => direction * compareRows(a, b, column));
+  }, [dataColumns, filteredRows, sort]);
+
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / PER_PAGE));
+  const currentPage = Math.min(page, pageCount);
+  const start = (currentPage - 1) * PER_PAGE;
+  const pageRows = sortedRows.slice(start, start + PER_PAGE);
+  const from = sortedRows.length === 0 ? 0 : start + 1;
+  const to = Math.min(start + PER_PAGE, sortedRows.length);
+  const hasFilters = Boolean(search.trim() || status);
 
   function toggleSort(key: string) {
     setSort((current) =>
@@ -105,6 +208,22 @@ export function RegistrantsTable({
         ? { key, direction: current.direction === 'asc' ? 'desc' : 'asc' }
         : { key, direction: 'asc' },
     );
+  }
+
+  function clearFilters() {
+    setSearch('');
+    setStatus('');
+    setPage(1);
+  }
+
+  function handlePageClickCapture(event: MouseEvent<HTMLDivElement>) {
+    const target = event.target as Element | null;
+    const anchor = target?.closest('a');
+    if (!anchor) return;
+    event.preventDefault();
+    const href = anchor.getAttribute('href') ?? '';
+    const targetPage = Number(new URLSearchParams(href.split('?')[1] ?? '').get('page'));
+    if (Number.isInteger(targetPage) && targetPage > 0) setPage(targetPage);
   }
 
   function matrix(): string[][] {
@@ -138,8 +257,55 @@ export function RegistrantsTable({
     );
   }
 
+  const empty = hasFilters ? (
+    <EmptyState
+      variant="filtered"
+      icon={<SearchX className="size-6" />}
+      title="Ei tuloksia"
+      description="Kokeile toista hakusanaa tai tyhjennä suodattimet."
+      action={
+        <Button variant="outline" onClick={clearFilters}>
+          Tyhjennä suodattimet
+        </Button>
+      }
+    />
+  ) : (
+    <EmptyState
+      icon={<Users className="size-6" />}
+      title="Ei vielä maksettuja tai laskutettuja ilmoittautumisia."
+    />
+  );
+
   return (
     <div>
+      <FilterBar
+        search={{
+          name: 'q',
+          value: search,
+          placeholder: 'Hae ilmoittautuneita',
+          onChange: (value) => {
+            setSearch(value);
+            setPage(1);
+          },
+        }}
+        chips={{
+          name: 'status',
+          value: status,
+          options: STATUS_OPTIONS.map((option) => ({
+            ...option,
+            count: option.value
+              ? statusCounts[option.value as RegistrantStatus]
+              : searchedRows.length,
+          })),
+          onChange: (nextStatus) => {
+            setStatus(nextStatus);
+            setPage(1);
+          },
+        }}
+        resultCount={filteredRows.length}
+        onClear={clearFilters}
+      />
+
       <div className="mb-3 flex flex-wrap justify-end gap-2">
         <Button type="button" size="sm" variant="secondary" onClick={downloadCsv}>
           <Download className="size-4" /> Lataa CSV
@@ -148,96 +314,30 @@ export function RegistrantsTable({
           <Download className="size-4" /> Lataa XLSX
         </Button>
       </div>
-      <div className="overflow-x-auto rounded-lg border bg-card shadow-sm">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <caption className="sr-only">Ilmoittautuneet</caption>
-          <thead>
-            <tr className="border-b text-xs uppercase text-muted-foreground">
-              {columns.map((column) => {
-                if (column.kind === 'actions') {
-                  return (
-                    <th key={column.key} scope="col" className="px-4 py-3 font-normal align-middle">
-                      Toiminnot
-                    </th>
-                  );
-                }
-                const active = sort.key === column.key;
-                const ariaSort = active
-                  ? sort.direction === 'asc'
-                    ? 'ascending'
-                    : 'descending'
-                  : 'none';
-                return (
-                  <th
-                    key={column.key}
-                    scope="col"
-                    aria-sort={ariaSort}
-                    className="px-4 py-3 font-normal align-middle"
-                  >
-                    <button
-                      type="button"
-                      className="inline-flex items-center gap-1.5 rounded-sm uppercase hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                      onClick={() => toggleSort(column.key)}
-                    >
-                      {column.label}
-                      {active ? (
-                        sort.direction === 'asc' ? (
-                          <ArrowUp className="size-3.5" />
-                        ) : (
-                          <ArrowDown className="size-3.5" />
-                        )
-                      ) : (
-                        <ArrowUpDown className="size-3.5 opacity-40" />
-                      )}
-                    </button>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {sortedRows.map((row) => (
-              <tr
-                key={row.id}
-                className="border-b align-top transition-colors last:border-0 hover:bg-muted/40"
-              >
-                {columns.map((column) => (
-                  <td
-                    key={column.key}
-                    className={`px-4 py-3 ${
-                      column.kind === 'name'
-                        ? 'font-medium'
-                        : column.kind === 'status' || column.kind === 'actions'
-                          ? ''
-                          : 'text-muted-foreground'
-                    }`}
-                  >
-                    {column.kind === 'actions' ? (
-                      renderActions?.(row)
-                    ) : column.kind === 'status' ? (
-                      row.participantRefundedAt ? (
-                        <Badge variant="secondary">Hyvitetty</Badge>
-                      ) : row.status === 'RECEIVED' ? (
-                        <Badge variant="warning">Lasku avoinna</Badge>
-                      ) : row.status === 'CANCELLED' ? (
-                        <Badge variant="secondary">Peruutettu</Badge>
-                      ) : (
-                        <Badge variant="success">Maksettu</Badge>
-                      )
-                    ) : column.kind === 'email' ? (
-                      (row.email ?? 'ei sähköpostia')
-                    ) : column.kind === 'date' ? (
-                      dateLabel(row.createdAt)
-                    ) : (
-                      value(row, column)
-                    )}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+
+      <DataTableBase
+        caption="Ilmoittautuneet"
+        columns={dataColumns}
+        rows={pageRows}
+        getRowKey={(row) => row.id}
+        sort={sort}
+        mode="client"
+        onSort={toggleSort}
+        empty={empty}
+      />
+
+      {sortedRows.length > 0 && (
+        <div className="mt-4" onClickCapture={handlePageClickCapture}>
+          <Pagination
+            page={currentPage}
+            pageCount={pageCount}
+            total={sortedRows.length}
+            from={from}
+            to={to}
+            buildHref={(target) => `?page=${target}`}
+          />
+        </div>
+      )}
     </div>
   );
 }
