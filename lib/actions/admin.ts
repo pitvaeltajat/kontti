@@ -11,6 +11,7 @@ import { parseEurosInput } from '@/lib/money';
 import { parseQuestionDrafts } from '@/lib/questions';
 import { LEADER_DISCOUNT_CODE, normalizeCode } from '@/lib/discount';
 import { isSystemCategorySlug } from '@/lib/categories';
+import { savedRedirect } from '@/lib/saved-redirect';
 import { DEFAULT_EVENT_ACCOUNTING_CLASS_NAME } from '@/lib/accounting';
 import { defaultRegistrationDeadline } from '@/lib/event-registration';
 import {
@@ -67,6 +68,7 @@ export async function setUserRole(formData: FormData): Promise<void> {
 
   await prisma.user.update({ where: { id }, data: { role } });
   revalidatePath('/admin/users');
+  redirect(savedRedirect('/admin/users', 'role'));
 }
 
 // --- Items ----------------------------------------------------------------
@@ -335,7 +337,7 @@ export async function saveItem(
   }
 
   revalidatePath('/', 'layout');
-  redirect(isEvent ? '/admin/events' : '/admin/items');
+  redirect(savedRedirect(isEvent ? '/admin/events' : '/admin/items', isEvent ? 'event' : 'item'));
 }
 
 export async function hideItem(formData: FormData): Promise<void> {
@@ -467,7 +469,7 @@ export async function saveCategory(
   }
 
   revalidatePath('/', 'layout');
-  redirect('/admin/categories');
+  redirect(savedRedirect('/admin/categories', 'category'));
 }
 
 export async function deleteCategory(formData: FormData): Promise<void> {
@@ -504,7 +506,7 @@ export async function saveAccountingClass(
 
   await prisma.accountingClass.create({ data: { name, sortOrder } });
   revalidatePath('/admin/accounting-classes');
-  return {};
+  return { ok: true };
 }
 
 export async function deleteAccountingClass(formData: FormData): Promise<void> {
@@ -569,7 +571,7 @@ export async function saveDiscount(
     await prisma.discountCode.create({ data });
   }
   revalidatePath('/admin/discounts');
-  redirect('/admin/discounts');
+  redirect(savedRedirect('/admin/discounts', 'discount'));
 }
 
 export async function deleteDiscount(formData: FormData): Promise<void> {

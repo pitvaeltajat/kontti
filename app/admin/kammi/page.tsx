@@ -77,7 +77,13 @@ export default async function AdminKammiPage() {
                       <FormButton
                         size="sm"
                         variant="ghost"
-                        confirm={`Perutaanko varaus ${fi(b.startDate)}–${fi(b.endDate)}? Päivät vapautuvat.`}
+                        confirm={{
+                          title: 'Peru varaus',
+                          description: `Perutaanko varaus ${fi(b.startDate)}–${fi(b.endDate)}? Päivät vapautuvat.`,
+                          confirmLabel: 'Peru varaus',
+                          cancelLabel: 'Älä peru',
+                          tone: 'destructive',
+                        }}
                       >
                         Peru
                       </FormButton>

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Check, Copy } from 'lucide-react';
+import { useToast } from '@/components/ui/toast';
 
 export function CopyableOrderRef({
   orderId,
@@ -10,6 +11,7 @@ export function CopyableOrderRef({
   orderId: string;
   label?: string;
 }) {
+  const toast = useToast();
   const [copied, setCopied] = useState(false);
   const value = `#${orderId.slice(-8).toUpperCase()}`;
 
@@ -18,8 +20,11 @@ export function CopyableOrderRef({
       await navigator.clipboard.writeText(value);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 2000);
+      toast.success('Tilausnumero kopioitu', { description: value });
     } catch {
-      // Clipboard access can be denied; the value stays visible to copy by hand.
+      toast.error('Kopiointi ei onnistunut', {
+        description: `Kopioi numero käsin: ${value}`,
+      });
     }
   }
 
@@ -33,7 +38,7 @@ export function CopyableOrderRef({
         className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
       >
         {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-        <span aria-live="polite">{copied ? 'Kopioitu' : 'Kopioi'}</span>
+        <span>Kopioi</span>
       </button>
     </span>
   );

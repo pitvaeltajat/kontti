@@ -30,7 +30,21 @@ export default async function AccountingClassesPage() {
               <div><p className="font-semibold">{accountingClass.name}</p><p className="text-xs text-muted-foreground">Järjestys {accountingClass.sortOrder} · käytössä {used} kohteessa</p></div>
               <form action={deleteAccountingClass}>
                 <input type="hidden" name="id" value={accountingClass.id} />
-                <FormButton size="sm" variant="ghost" disabled={used > 0} title={used > 0 ? 'Käytössä olevaa luokkaa ei voi poistaa.' : 'Poista luokka'} confirm={`Poistetaanko kirjanpitoluokka "${accountingClass.name}"?`}>Poista</FormButton>
+                <FormButton
+                  size="sm"
+                  variant="ghost"
+                  disabled={used > 0}
+                  title={used > 0 ? 'Käytössä olevaa luokkaa ei voi poistaa.' : 'Poista luokka'}
+                  confirm={{
+                    title: 'Poista kirjanpitoluokka',
+                    description: `Poistetaanko kirjanpitoluokka ”${accountingClass.name}”?`,
+                    confirmLabel: 'Poista',
+                    cancelLabel: 'Älä poista',
+                    tone: 'destructive',
+                  }}
+                >
+                  Poista
+                </FormButton>
               </form>
             </div>
           );

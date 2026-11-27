@@ -5,6 +5,7 @@ import { getUserRole, isSuperAdmin } from '@/lib/admin';
 import { getSession } from '@/lib/session';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
+import { ToastProvider } from '@/components/ui/toast';
 import '@/styles/globals.css';
 
 // The catalog is read from Postgres on every request, so nothing here is
@@ -58,7 +59,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
       <html lang="fi">
         <body>
-          <main className="flex min-h-screen flex-col justify-center">{children}</main>
+          <ToastProvider>
+            <main className="flex min-h-screen flex-col justify-center">{children}</main>
+          </ToastProvider>
         </body>
       </html>
     );
@@ -67,19 +70,21 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="fi">
       <body>
-        <div className="flex min-h-screen flex-col">
-          <a
-            href="#main-content"
-            className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-card focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
-          >
-            Siirry sisältöön
-          </a>
-          <SiteHeader role={role ?? undefined} pathname={pathname} />
-          <main id="main-content" className="flex-1">
-            {children}
-          </main>
-          <SiteFooter />
-        </div>
+        <ToastProvider>
+          <div className="flex min-h-screen flex-col">
+            <a
+              href="#main-content"
+              className="sr-only focus:not-sr-only focus:absolute focus:left-4 focus:top-4 focus:z-50 focus:rounded-md focus:bg-card focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:shadow-md focus:ring-2 focus:ring-ring"
+            >
+              Siirry sisältöön
+            </a>
+            <SiteHeader role={role ?? undefined} pathname={pathname} />
+            <main id="main-content" className="flex-1">
+              {children}
+            </main>
+            <SiteFooter />
+          </div>
+        </ToastProvider>
       </body>
     </html>
   );

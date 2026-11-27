@@ -13,13 +13,17 @@ import type { StripeExpressCheckoutElementConfirmEvent } from '@stripe/stripe-js
 import { CheckCircle2, Copy, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { Field, describedBy } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { LoadingPill } from '@/components/ui/loading-pill';
+import { useToast } from '@/components/ui/toast';
 
 const stripePromise = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
   ? loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY)
   : null;
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 export function EventPayment({
   token,
@@ -41,12 +45,17 @@ export function EventPayment({
   canCancel: boolean;
 }) {
   const router = useRouter();
+  const toast = useToast();
   const [parentEmail, setParentEmail] = useState('');
+  const [parentEmailError, setParentEmailError] = useState<string | null>(null);
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
   const [currentStatus, setCurrentStatus] = useState(status);
+  const [cancelTarget, setCancelTarget] = useState<
+    { kind: 'all' } | { kind: 'participant'; id: string; name: string } | null
+  >(null);
+  const [cancelError, setCancelError] = useState<string | null>(null);
   // window.location only exists on the client. Reading it during render makes
   // the client output differ from the server HTML (the mailto href below), so
   // render the empty server snapshot first and let React swap in the real link
@@ -68,30 +77,34 @@ export function EventPayment({
       return;
     }
     await navigator.clipboard.writeText(message);
-    setCopied(true);
+    toast.success('Linkki kopioitu', { description: 'Voit lähettää sen maksajalle.' });
   }
 
   async function copyLink() {
     await navigator.clipboard.writeText(url);
-    setCopied(true);
+    toast.success('Linkki kopioitu', { description: 'Voit lähettää sen maksajalle.' });
   }
 
   async function sendInstructions() {
+    const email = parentEmail.trim();
+    const validationError = EMAIL_RE.test(email) ? null : 'Anna kelvollinen sähköpostiosoite.';
+    setParentEmailError(validationError);
+    if (validationError) return;
     setError(null);
     setLoading(true);
     try {
       const response = await fetch(`/api/event-payment/${encodeURIComponent(token)}/email`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ email: parentEmail.trim() }),
+        body: JSON.stringify({ email }),
       });
       const data = (await response.json()) as { error?: string; sent?: boolean };
       if (!response.ok || !data.sent) {
         setError(data.error ?? 'Maksuohjetta ei voitu lähettää.');
         return;
       }
+      toast.info('Maksuohje lähetetty', { description: email });
       setParentEmail('');
-      setCopied(false);
     } catch {
       setError('Maksuohjetta ei voitu lähettää. Tarkista yhteys ja yritä uudelleen.');
     } finally {
@@ -131,46 +144,31 @@ export function EventPayment({
 
   const paid = currentStatus === 'PAID' || currentStatus === 'COMPLETED';
   const cancelled = currentStatus === 'CANCELLED';
-  async function cancelRegistration() {
-    const message =
-      participants.length > 1
-        ? 'Perutaanko kaikki ilmoittautumiset? Tätä ei voi palauttaa tästä linkistä.'
-        : 'Perutaanko ilmoittautuminen? Tätä ei voi palauttaa tästä linkistä.';
-    if (!window.confirm(message)) return;
-    setError(null);
-    setLoading(true);
-    try {
-      const response = await fetch(`/api/event-payment/${encodeURIComponent(token)}/cancel`, {
-        method: 'POST',
-      });
-      const data = (await response.json()) as { error?: string; cancelled?: boolean };
-      if (!response.ok || !data.cancelled) {
-        setError(data.error ?? 'Ilmoittautumista ei voitu perua.');
-        return;
-      }
-      setCurrentStatus('CANCELLED');
-      router.refresh();
-    } catch {
-      setError('Ilmoittautumista ei voitu perua. Tarkista yhteys ja yritä uudelleen.');
-    } finally {
-      setLoading(false);
-    }
+
+  function openCancelAll() {
+    setCancelError(null);
+    setCancelTarget({ kind: 'all' });
   }
 
-  async function cancelParticipant(participantId: string, participantName: string) {
-    if (
-      !window.confirm(
-        `Perutaanko ${participantName}? Tätä ei voi palauttaa tästä linkistä.`,
-      )
-    )
-      return;
-    setError(null);
+  function openCancelParticipant(id: string, name: string) {
+    setCancelError(null);
+    setCancelTarget({ kind: 'participant', id, name });
+  }
+
+  async function confirmCancel() {
+    const target = cancelTarget;
+    if (!target) return;
+    setCancelError(null);
     setLoading(true);
     try {
       const response = await fetch(`/api/event-payment/${encodeURIComponent(token)}/cancel`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ participantId }),
+        ...(target.kind === 'all'
+          ? {}
+          : {
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ participantId: target.id }),
+            }),
       });
       const data = (await response.json()) as {
         error?: string;
@@ -178,17 +176,46 @@ export function EventPayment({
         orderCancelled?: boolean;
       };
       if (!response.ok || !data.cancelled) {
-        setError(data.error ?? 'Ilmoittautumista ei voitu perua.');
+        setCancelError(data.error ?? 'Ilmoittautumista ei voitu perua.');
         return;
       }
-      if (data.orderCancelled) setCurrentStatus('CANCELLED');
+      if (target.kind === 'all') {
+        setCurrentStatus('CANCELLED');
+        toast.success(
+          participants.length > 1 ? 'Ilmoittautumiset peruttu' : 'Ilmoittautuminen peruttu',
+          { description: 'Maksulinkki ei ole enää käytettävissä.' },
+        );
+      } else {
+        if (data.orderCancelled) setCurrentStatus('CANCELLED');
+        toast.success('Ilmoittautuminen peruttu', {
+          description: `${target.name} on poistettu ilmoittautumisesta.`,
+        });
+      }
+      setCancelTarget(null);
       router.refresh();
     } catch {
-      setError('Ilmoittautumista ei voitu perua. Tarkista yhteys ja yritä uudelleen.');
+      setCancelError('Ilmoittautumista ei voitu perua. Tarkista yhteys ja yritä uudelleen.');
     } finally {
       setLoading(false);
     }
   }
+
+  const cancelAll = cancelTarget?.kind === 'all';
+  const cancelTitle = cancelAll
+    ? participants.length > 1
+      ? 'Peru kaikki ilmoittautumiset'
+      : 'Peru ilmoittautuminen'
+    : 'Peru ilmoittautuminen';
+  const cancelDescription = cancelAll
+    ? participants.length > 1
+      ? 'Perutaanko kaikki ilmoittautumiset? Tätä ei voi palauttaa tästä linkistä.'
+      : 'Perutaanko ilmoittautuminen? Tätä ei voi palauttaa tästä linkistä.'
+    : cancelTarget
+      ? `Perutaanko ${cancelTarget.name}? Tätä ei voi palauttaa tästä linkistä.`
+      : 'Perutaanko ilmoittautuminen? Tätä ei voi palauttaa tästä linkistä.';
+  const cancelConfirmLabel =
+    cancelAll && participants.length > 1 ? 'Peru kaikki ilmoittautumiset' : 'Peru ilmoittautuminen';
+
   return (
     <div className="container flex justify-center py-12">
       <Card className="w-full max-w-2xl">
@@ -238,9 +265,7 @@ export function EventPayment({
                             variant="ghost"
                             size="sm"
                             className="text-destructive hover:text-destructive"
-                            onClick={() =>
-                              void cancelParticipant(participant.id, participant.name)
-                            }
+                            onClick={() => openCancelParticipant(participant.id, participant.name)}
                             disabled={loading}
                           >
                             Peru ilmoittautuminen
@@ -269,28 +294,48 @@ export function EventPayment({
                 </Button>
                 <div className="grid gap-2">
                   <Button type="button" variant="outline" onClick={copyLink}>
-                    <Copy className="size-4" /> {copied ? 'Linkki kopioitu' : 'Kopioi linkki'}
+                    <Copy className="size-4" /> Kopioi linkki
                   </Button>
                 </div>
                 <div className="space-y-2 border-t border-primary/15 pt-3">
-                  <Label htmlFor="parent-email">Tai lähetä maksuohje sähköpostiin</Label>
-                  <div className="flex flex-col gap-2 sm:flex-row">
-                    <Input
-                      id="parent-email"
-                      type="email"
-                      value={parentEmail}
-                      onChange={(e) => setParentEmail(e.target.value)}
-                      placeholder="huoltaja@esimerkki.com"
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={sendInstructions}
-                      disabled={loading || !parentEmail.trim()}
-                    >
-                      Lähetä ohje
-                    </Button>
-                  </div>
+                  <Field
+                    label="Tai lähetä maksuohje sähköpostiin"
+                    htmlFor="parent-email"
+                    hint="Maksuohje lähetetään tähän osoitteeseen."
+                    error={parentEmailError}
+                  >
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        id="parent-email"
+                        type="email"
+                        value={parentEmail}
+                        onChange={(e) => {
+                          setParentEmail(e.target.value);
+                          if (parentEmailError) {
+                            setParentEmailError(
+                              EMAIL_RE.test(e.target.value.trim())
+                                ? null
+                                : 'Anna kelvollinen sähköpostiosoite.',
+                            );
+                          }
+                        }}
+                        placeholder="huoltaja@esimerkki.com"
+                        aria-invalid={parentEmailError ? true : undefined}
+                        aria-describedby={describedBy('parent-email', {
+                          hint: true,
+                          error: Boolean(parentEmailError),
+                        })}
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={sendInstructions}
+                        disabled={loading}
+                      >
+                        Lähetä ohje
+                      </Button>
+                    </div>
+                  </Field>
                 </div>
               </section>
 
@@ -341,19 +386,16 @@ export function EventPayment({
             <section className="space-y-3 border-t pt-4">
               <p className="text-sm text-muted-foreground">
                 Ilmoittautumisen voi perua {registrationDeadline ?? 'ilmoittautumisen määräaikaan'}{' '}
-                mennessä.
-                Maksun palautus käsitellään ylläpidossa.
+                mennessä. Maksun palautus käsitellään ylläpidossa.
               </p>
               <Button
                 type="button"
                 variant="ghost"
                 className="w-full text-destructive hover:text-destructive"
-                onClick={cancelRegistration}
+                onClick={openCancelAll}
                 disabled={loading}
               >
-                {participants.length > 1
-                  ? 'Peru kaikki ilmoittautumiset'
-                  : 'Peru ilmoittautuminen'}
+                {participants.length > 1 ? 'Peru kaikki ilmoittautumiset' : 'Peru ilmoittautuminen'}
               </Button>
             </section>
           )}
@@ -369,6 +411,20 @@ export function EventPayment({
           )}
         </CardContent>
       </Card>
+      <ConfirmDialog
+        open={cancelTarget !== null}
+        onOpenChange={(open) => {
+          if (!open) setCancelTarget(null);
+        }}
+        title={cancelTitle}
+        description={cancelDescription}
+        confirmLabel={cancelConfirmLabel}
+        cancelLabel="Älä peru"
+        tone="destructive"
+        pending={loading}
+        error={cancelError}
+        onConfirm={confirmCancel}
+      />
     </div>
   );
 }

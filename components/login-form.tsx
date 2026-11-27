@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { FormError } from '@/components/ui/field';
 import { LoadingPill } from '@/components/ui/loading-pill';
 
 export function LoginForm({
@@ -60,11 +61,7 @@ export function LoginForm({
           Käytämme Google-tiliä vain kirjautumiseen. Emme näe salasanaasi.
         </p>
 
-        {error && (
-          <p role="alert" className="text-sm text-destructive">
-            {error}
-          </p>
-        )}
+        <FormError className="text-sm">{error}</FormError>
 
         {devEnabled && (
           <form onSubmit={devSignIn} className="space-y-3 border-t pt-4">

@@ -90,7 +90,7 @@ export async function saveKammiSettings(
 
   revalidatePath('/admin/kammi');
   revalidatePath('/kammi');
-  return {};
+  return { ok: true };
 }
 
 /** Admin cancels a booking, freeing the dates and removing its calendar event. */

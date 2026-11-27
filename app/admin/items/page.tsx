@@ -116,7 +116,12 @@ export default async function AdminItemsPage() {
                           <FormButton
                             size="sm"
                             variant="ghost"
-                            confirm={`Piilota "${item.name}" kaupasta? Voit palauttaa sen muokkaamalla.`}
+                            confirm={{
+                              title: 'Piilota tuote',
+                              description: `Piilota ”${item.name}” kaupasta? Voit palauttaa sen muokkaamalla.`,
+                              confirmLabel: 'Piilota',
+                              tone: 'default',
+                            }}
                           >
                             Piilota
                           </FormButton>

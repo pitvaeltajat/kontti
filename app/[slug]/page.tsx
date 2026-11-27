@@ -152,6 +152,7 @@ export default async function ItemPage({ params }: { params: Promise<{ slug: str
           <div className="mt-6">
             <AddToCartForm
               itemId={item.id}
+              name={item.name}
               variants={item.variants}
               withQuantity
               disabled={soldOut || registrationClosed}

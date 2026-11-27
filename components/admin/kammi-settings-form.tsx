@@ -1,14 +1,16 @@
 'use client';
 
+import { useEffect, useState } from 'react';
 import { useActionState } from 'react';
 import { saveKammiSettings } from '@/lib/actions/kammi';
-import { useState } from 'react';
 import { KuvatPicker } from '@/components/admin/kuvat-picker';
 import { Button } from '@/components/ui/button';
+import { Field, FormError } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { LoadingPill } from '@/components/ui/loading-pill';
+import { useToast } from '@/components/ui/toast';
 
 export type KammiSettingsValues = {
   heroImageUrl: string | null;
@@ -29,8 +31,7 @@ const euro = (cents: number) => (cents / 100).toFixed(2).replace('.', ',');
 
 function PriceField({ id, label, cents }: { id: string; label: string; cents: number }) {
   return (
-    <div className="space-y-1.5">
-      <Label htmlFor={id}>{label} (€)</Label>
+    <Field label={`${label} (€)`} htmlFor={id}>
       <Input
         id={id}
         name={id}
@@ -38,7 +39,7 @@ function PriceField({ id, label, cents }: { id: string; label: string; cents: nu
         pattern="[0-9]+([.,][0-9]{1,2})?"
         defaultValue={euro(cents)}
       />
-    </div>
+    </Field>
   );
 }
 
@@ -51,14 +52,17 @@ export function KammiSettingsForm({
 }) {
   const [state, action, pending] = useActionState(saveKammiSettings, undefined);
   const [heroImageUrl, setHeroImageUrl] = useState(settings.heroImageUrl ?? '');
+  const { success } = useToast();
+
+  useEffect(() => {
+    if (state?.ok) success('Asetukset tallennettu');
+  }, [state, success]);
 
   return (
     <form action={action} className="max-w-2xl space-y-5">
-      {state?.error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {state.error}
-        </p>
-      )}
+      <FormError className="rounded-md bg-destructive/10 px-3 py-2 text-sm">
+        {state?.error}
+      </FormError>
 
       <div className="space-y-1.5">
         <Label htmlFor="heroImageUrl">Kammin hero-kuva</Label>
@@ -136,8 +140,7 @@ export function KammiSettingsForm({
       </fieldset>
 
       <div className="grid gap-4 sm:grid-cols-2">
-        <div className="space-y-1.5">
-          <Label htmlFor="minNights">Vähimmäisyöt</Label>
+        <Field label="Vähimmäisyöt" htmlFor="minNights">
           <Input
             id="minNights"
             name="minNights"
@@ -146,9 +149,8 @@ export function KammiSettingsForm({
             step="1"
             defaultValue={settings.minNights}
           />
-        </div>
-        <div className="space-y-1.5">
-          <Label htmlFor="maxNights">Enimmäisyöt</Label>
+        </Field>
+        <Field label="Enimmäisyöt" htmlFor="maxNights">
           <Input
             id="maxNights"
             name="maxNights"
@@ -157,7 +159,7 @@ export function KammiSettingsForm({
             step="1"
             defaultValue={settings.maxNights}
           />
-        </div>
+        </Field>
       </div>
 
       <div className="space-y-1.5">

@@ -94,11 +94,14 @@ export default async function AdminUsersPage() {
                             <FormButton
                               size="sm"
                               variant={isSuper ? 'ghost' : 'outline'}
-                              confirm={
-                                isSuper
-                                  ? `Poistetaanko pääylläpito-oikeudet käyttäjältä ${user.email}?`
-                                  : `Annetaanko ${user.email} täydet pääylläpito-oikeudet?`
-                              }
+                              confirm={{
+                                title: 'Vaihda rooli',
+                                description: `Vaihdetaanko käyttäjän ${user.email} rooliksi ${
+                                  ROLE_LABEL[isSuper ? demoteTo : 'SUPERADMIN']
+                                }?`,
+                                confirmLabel: 'Vaihda rooli',
+                                tone: 'default',
+                              }}
                             >
                               {isSuper ? 'Poista pääylläpito' : 'Tee pääylläpitäjäksi'}
                             </FormButton>

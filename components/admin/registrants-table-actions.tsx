@@ -1,10 +1,11 @@
 'use client';
 
-import { useActionState, useEffect, useRef } from 'react';
+import { useActionState, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { cancelRegistrant, refundRegistrant, type ActionResult } from '@/lib/actions/admin';
-import { ConfirmDialog } from '@/components/admin/refund-dialog';
 import { Button } from '@/components/ui/button';
-import { LoadingPill } from '@/components/ui/loading-pill';
+import { ConfirmDialog } from '@/components/ui/confirm-dialog';
+import { useToast } from '@/components/ui/toast';
 import { formatCents } from '@/lib/money';
 import {
   RegistrantsTable,
@@ -12,62 +13,112 @@ import {
   type RegistrantRow,
 } from '@/components/admin/registrants-table';
 
-/** Close the surrounding <dialog> once the action succeeds, so a successful
- * cancel/refund doesn't leave the modal open. Errors keep it open to show. */
-function useCloseDialogOnSuccess(state: ActionResult) {
-  const formRef = useRef<HTMLFormElement>(null);
-  useEffect(() => {
-    if (!state.ok) return;
-    const dialog = formRef.current?.closest('dialog');
-    dialog?.close();
-    window.location.reload();
-    return () => dialog?.close();
-  }, [state]);
-  return formRef;
-}
-
 function CancelRegistrantForm({
   participantId,
   orderId,
+  name,
 }: {
   participantId: string;
   orderId: string;
+  name: string;
 }) {
-  const [state, action, pending] = useActionState(cancelRegistrant, {});
-  const formRef = useCloseDialogOnSuccess(state);
+  const [open, setOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const toast = useToast();
+  const router = useRouter();
+
+  const [state, action, pending] = useActionState(
+    async (prev: ActionResult, formData: FormData) => {
+      const result = await cancelRegistrant(prev, formData);
+      if (result.ok) {
+        setOpen(false);
+        toast.success('Ilmoittautuminen peruttu', {
+          description: `${name} on poistettu ilmoittautumisesta.`,
+        });
+        router.refresh();
+      }
+      return result;
+    },
+    {},
+  );
+
   return (
-    <form ref={formRef} action={action} className="space-y-3">
-      <input type="hidden" name="participantId" value={participantId} />
-      <input type="hidden" name="orderId" value={orderId} />
-      {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" variant="destructive" size="sm" disabled={pending}>
-        {pending ? <LoadingPill className="bg-current/25" /> : 'Vahvista'}
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        Peru ilmoittautuminen
       </Button>
-    </form>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Peru ilmoittautuminen"
+        description={`${name}: Haluatko varmasti peruuttaa tämän ilmoittautumisen?`}
+        confirmLabel="Peru ilmoittautuminen"
+        cancelLabel="Älä peru"
+        tone="destructive"
+        onConfirm={() => formRef.current?.requestSubmit()}
+        pending={pending}
+        error={state.error}
+      >
+        <form ref={formRef} action={action}>
+          <input type="hidden" name="participantId" value={participantId} />
+          <input type="hidden" name="orderId" value={orderId} />
+        </form>
+      </ConfirmDialog>
+    </>
   );
 }
 
 function RefundRegistrantForm({
   participantId,
   amountCents,
+  name,
 }: {
   participantId: string;
   amountCents: number;
+  name: string;
 }) {
-  const [state, action, pending] = useActionState(refundRegistrant, {});
-  const formRef = useCloseDialogOnSuccess(state);
+  const [open, setOpen] = useState(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const toast = useToast();
+  const router = useRouter();
+
+  const [state, action, pending] = useActionState(
+    async (prev: ActionResult, formData: FormData) => {
+      const result = await refundRegistrant(prev, formData);
+      if (result.ok) {
+        setOpen(false);
+        toast.success('Osallistumismaksu palautettu', {
+          description: `${formatCents(amountCents)} palautetaan asiakkaan kortille.`,
+        });
+        router.refresh();
+      }
+      return result;
+    },
+    {},
+  );
+
   return (
-    <form ref={formRef} action={action} className="space-y-3">
-      <input type="hidden" name="participantId" value={participantId} />
-      {state.error && <p className="text-sm text-destructive">{state.error}</p>}
-      <Button type="submit" variant="destructive" size="sm" disabled={pending}>
-        {pending ? (
-          <LoadingPill className="bg-current/25" />
-        ) : (
-          `Palauta ${formatCents(amountCents)}`
-        )}
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setOpen(true)}>
+        Hyvitä osallistumismaksu
       </Button>
-    </form>
+      <ConfirmDialog
+        open={open}
+        onOpenChange={setOpen}
+        title="Palauta maksu"
+        description={`${name} — ${formatCents(amountCents)}. Haluatko varmasti palauttaa maksun?`}
+        confirmLabel={`Palauta ${formatCents(amountCents)}`}
+        cancelLabel="Älä palauta"
+        tone="destructive"
+        onConfirm={() => formRef.current?.requestSubmit()}
+        pending={pending}
+        error={state.error}
+      >
+        <form ref={formRef} action={action}>
+          <input type="hidden" name="participantId" value={participantId} />
+        </form>
+      </ConfirmDialog>
+    </>
   );
 }
 
@@ -88,16 +139,12 @@ export function RegistrantsTableWithActions({
 
     if (!row.participantCancelled) {
       return (
-        <ConfirmDialog
+        <CancelRegistrantForm
           key="cancel"
-          triggerLabel="Peru ilmoittautuminen"
-          triggerVariant="ghost"
-          triggerSize="sm"
-          title="Peru ilmoittautuminen"
-          description={`${row.name}: Haluatko varmasti peruuttaa tämän ilmoittautumisen?`}
-        >
-          <CancelRegistrantForm participantId={row.participantId} orderId={row.orderId} />
-        </ConfirmDialog>
+          participantId={row.participantId}
+          orderId={row.orderId}
+          name={row.name}
+        />
       );
     }
 
@@ -116,19 +163,12 @@ export function RegistrantsTableWithActions({
       row.participantPriceCents > 0
     ) {
       return (
-        <ConfirmDialog
+        <RefundRegistrantForm
           key="refund"
-          triggerLabel="Hyvitä osallistumismaksu"
-          triggerVariant="ghost"
-          triggerSize="sm"
-          title="Palauta maksu"
-          description={`${row.name} — ${formatCents(row.participantPriceCents)}. Haluatko varmasti palauttaa maksun?`}
-        >
-          <RefundRegistrantForm
-            participantId={row.participantId}
-            amountCents={row.participantPriceCents}
-          />
-        </ConfirmDialog>
+          participantId={row.participantId}
+          amountCents={row.participantPriceCents}
+          name={row.name}
+        />
       );
     }
 

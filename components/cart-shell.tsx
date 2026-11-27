@@ -15,6 +15,7 @@ import {
 } from '@/lib/discount';
 import { Button } from '@/components/ui/button';
 import { ButtonLink } from '@/components/ui/button-link';
+import { Field, describedBy } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { ItemImage } from '@/components/item-image';
@@ -658,12 +659,15 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
         </div>
 
         <div className="space-y-3 border-t pt-4">
-          <div className="space-y-1.5">
-            <Label htmlFor="email">
-              {deferredCheckout
+          <Field
+            label={
+              deferredCheckout
                 ? 'Sähköposti (valinnainen, kuitti lähetetään tähän)'
-                : 'Sähköposti (kuitti lähetetään tähän)'}
-            </Label>
+                : 'Sähköposti (kuitti lähetetään tähän)'
+            }
+            htmlFor="email"
+            error={showEmailError ? 'Anna kelvollinen sähköpostiosoite.' : undefined}
+          >
             <Input
               id="email"
               type="email"
@@ -672,14 +676,9 @@ export function CartShell({ initialUser }: { initialUser: { name: string; email:
               onBlur={() => setEmailTouched(true)}
               placeholder={deferredCheckout ? 'vanhempi@example.com' : 'etunimi@example.com'}
               aria-invalid={showEmailError || undefined}
-              aria-describedby={showEmailError ? 'email-error' : undefined}
+              aria-describedby={describedBy('email', { error: showEmailError })}
             />
-            {showEmailError && (
-              <p id="email-error" className="text-xs text-destructive" aria-live="polite">
-                Anna kelvollinen sähköpostiosoite.
-              </p>
-            )}
-          </div>
+          </Field>
         </div>
 
         {eventOnly && catalogLoaded && !freeEventRegistration && (

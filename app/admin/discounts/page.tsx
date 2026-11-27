@@ -93,7 +93,13 @@ export default async function AdminDiscountsPage() {
                     <FormButton
                       size="sm"
                       variant="ghost"
-                      confirm={`Poista koodi "${code.code}"? Tätä ei voi perua.`}
+                      confirm={{
+                        title: 'Poista koodi',
+                        description: `Poista koodi ”${code.code}”? Tätä ei voi perua.`,
+                        confirmLabel: 'Poista',
+                        cancelLabel: 'Älä poista',
+                        tone: 'destructive',
+                      }}
                     >
                       Poista
                     </FormButton>

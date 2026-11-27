@@ -7,9 +7,11 @@ import { cn } from '@/lib/cn';
 import { formatCents } from '@/lib/money';
 import { Button } from '@/components/ui/button';
 import { ButtonLink } from '@/components/ui/button-link';
+import { useToast } from '@/components/ui/toast';
 
 export function AddToCartForm({
   itemId,
+  name,
   variants = [],
   withQuantity = false,
   disabled = false,
@@ -17,25 +19,29 @@ export function AddToCartForm({
   className,
 }: {
   itemId: string;
+  name: string;
   variants?: { id: string; name: string | null; priceCents: number }[];
   withQuantity?: boolean;
   disabled?: boolean;
   disabledLabel?: string;
   className?: string;
 }) {
+  const toast = useToast();
   const [quantity, setQuantity] = useState(1);
   const [variantId, setVariantId] = useState(
     () =>
       variants.reduce((min, v) => (v.priceCents < min.priceCents ? v : min), variants[0])?.id ?? '',
   );
-  const [added, setAdded] = useState(false);
   const [hasAdded, setHasAdded] = useState(false);
 
   function handleAdd() {
     cartStore.add(itemId, quantity, variantId || undefined);
-    setAdded(true);
     setHasAdded(true);
-    window.setTimeout(() => setAdded(false), 1500);
+    const variant = variants.find((candidate) => candidate.id === variantId);
+    const variantSuffix = variant?.name ? ` (${variant.name})` : '';
+    toast.success('Lisätty ostoskoriin', {
+      description: `${quantity} × ${name}${variantSuffix}`,
+    });
   }
 
   return (
@@ -79,14 +85,8 @@ export function AddToCartForm({
           </button>
         </div>
       )}
-      <Button
-        type="button"
-        disabled={disabled}
-        onClick={handleAdd}
-        className="min-w-44"
-        aria-live="polite"
-      >
-        {disabled && disabledLabel ? disabledLabel : added ? 'Lisätty koriin' : 'Lisää ostoskoriin'}
+      <Button type="button" disabled={disabled} onClick={handleAdd} className="min-w-44">
+        {disabled && disabledLabel ? disabledLabel : 'Lisää ostoskoriin'}
       </Button>
       {hasAdded && (
         <ButtonLink href="/cart" variant="outline">

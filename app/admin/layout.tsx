@@ -1,9 +1,11 @@
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { Store, LogOut } from 'lucide-react';
 import { signOut } from '@/lib/auth';
 import { isSuperAdmin } from '@/lib/admin';
 import { requireEventAdmin } from '@/lib/admin-guard';
 import { AdminSidebarNav } from '@/components/admin/sidebar-nav';
+import { FlashToast } from '@/components/admin/flash-toast';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
   // Event admins and superadmins reach the admin area; others go to /login.
@@ -12,6 +14,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
 
   return (
     <div className="container flex flex-col gap-6 py-6 md:flex-row md:gap-8">
+      <Suspense fallback={null}>
+        <FlashToast />
+      </Suspense>
       {/* Admin sidebar. The navy bar on top is the shop's single nav; this side
           menu is the admin's, so the two no longer read as competing bars.
           On phones it lies flat as a horizontal scroll strip. */}

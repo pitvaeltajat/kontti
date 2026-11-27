@@ -77,7 +77,13 @@ export default async function AdminCategoriesPage() {
                         size="sm"
                         variant="ghost"
                         disabled={systemCategory || category._count.items > 0}
-                        confirm={`Poista kategoria "${category.name}"? Tätä ei voi perua.`}
+                        confirm={{
+                          title: 'Poista kategoria',
+                          description: `Poista kategoria ”${category.name}”? Tätä ei voi perua.`,
+                          confirmLabel: 'Poista',
+                          cancelLabel: 'Älä poista',
+                          tone: 'destructive',
+                        }}
                       >
                         Poista
                       </FormButton>

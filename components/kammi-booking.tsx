@@ -11,6 +11,7 @@ import {
   type KammiTier,
 } from '@/lib/kammi';
 import { Button } from '@/components/ui/button';
+import { FormError } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -622,14 +623,7 @@ export function KammiBooking({
           )}
         </div>
 
-        {error && (
-          <p
-            role="alert"
-            className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive"
-          >
-            {error}
-          </p>
-        )}
+        <FormError className="rounded-md bg-destructive/10 px-3 py-2 text-sm">{error}</FormError>
 
         <Button
           variant="cta"

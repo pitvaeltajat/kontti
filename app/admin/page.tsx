@@ -7,7 +7,6 @@ import { formatCents } from '@/lib/money';
 import { requireSuperAdmin } from '@/lib/admin-guard';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ConfirmDialog } from '@/components/admin/refund-dialog';
 import { CancelOrderForm, RefundOrderForm } from '@/components/admin/order-actions';
 
 export const metadata: Metadata = { title: 'Tilaukset' };
@@ -217,15 +216,7 @@ export default async function AdminOrdersPage({
 
                 <div className="relative z-10 mt-3 flex flex-wrap gap-2">
                   {order.status === 'RECEIVED' && (
-                    <ConfirmDialog
-                      triggerLabel="Peru tilaus"
-                      triggerVariant="destructive"
-                      triggerSize="sm"
-                      title="Peru tilaus"
-                      description="Perutaanko tilaus? Tätä ei voi perua."
-                    >
-                      <CancelOrderForm orderId={order.id} statusParam={statusParam} />
-                    </ConfirmDialog>
+                    <CancelOrderForm orderId={order.id} statusParam={statusParam} />
                   )}
                   {order.status === 'CANCELLED' &&
                     order.paidAt &&
@@ -236,24 +227,11 @@ export default async function AdminOrdersPage({
                         Palauta maksu
                       </Button>
                     ) : (
-                      <ConfirmDialog
-                        triggerLabel="Palauta maksu"
-                        triggerVariant="ghost"
-                        triggerSize="sm"
-                        title="Palauta maksu"
-                        description={
-                          <>
-                            Palautettava summa {formatCents(order.totalCents)}. Haluatko varmasti
-                            palauttaa maksun? Summa palautetaan asiakkaan maksukortille.
-                          </>
-                        }
-                      >
-                        <RefundOrderForm
-                          orderId={order.id}
-                          statusParam={statusParam}
-                          amountCents={order.totalCents}
-                        />
-                      </ConfirmDialog>
+                      <RefundOrderForm
+                        orderId={order.id}
+                        statusParam={statusParam}
+                        amountCents={order.totalCents}
+                      />
                     ))}
                 </div>
               </div>

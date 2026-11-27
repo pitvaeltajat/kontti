@@ -27,7 +27,7 @@ export async function saveSiteSettings(
   });
 
   revalidatePath('/', 'layout');
-  return {};
+  return { ok: true };
 }
 
 function normalizeBannerPosition(raw: string): string {

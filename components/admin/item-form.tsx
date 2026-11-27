@@ -13,6 +13,7 @@ import {
   type QuestionType,
 } from '@/lib/questions';
 import { Button } from '@/components/ui/button';
+import { Field, FormError, describedBy } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingPill } from '@/components/ui/loading-pill';
@@ -128,10 +129,37 @@ export function ItemForm({
   const [slug, setSlug] = useState(item?.slug ?? '');
   const [slugManuallyEdited, setSlugManuallyEdited] = useState(Boolean(item?.id));
   const isEvent = eventMode;
+  const [stock, setStock] = useState(item?.stock?.toString() ?? '');
+  const [touched, setTouched] = useState({ name: false, stock: false });
+  const [submitAttempted, setSubmitAttempted] = useState(false);
   const [imageUrl, setImageUrl] = useState(item?.imageUrl ?? '');
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  const nameInvalid = !name.trim();
+  const stockInvalid = !isEvent && stock.trim() !== '' && !/^\d+$/.test(stock.trim());
+  const nameError =
+    (touched.name || submitAttempted) && nameInvalid ? 'Anna tuotteelle nimi.' : undefined;
+  const stockError =
+    (touched.stock || submitAttempted) && stockInvalid
+      ? 'Anna varastomäärä kokonaislukuna tai jätä kenttä tyhjäksi, jos määrää ei rajoiteta.'
+      : undefined;
+  const formError =
+    submitAttempted && (nameInvalid || stockInvalid) ? 'Tarkista merkityt kentät.' : undefined;
+
+  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+    setTouched({ name: true, stock: true });
+    setSubmitAttempted(true);
+    if (nameInvalid || stockInvalid) {
+      event.preventDefault();
+      document.getElementById(nameInvalid ? 'item-name' : 'item-stock')?.focus();
+      return;
+    }
+    if (!event.currentTarget.reportValidity()) {
+      event.preventDefault();
+    }
+  }
 
   const filteredNotificationUsers = notificationUsers.filter((user) => {
     const needle = notificationSearch.trim().toLowerCase();
@@ -191,15 +219,10 @@ export function ItemForm({
   }
 
   return (
-    <form action={action} className="max-w-3xl space-y-6">
-      {state?.error && (
-        <p
-          role="alert"
-          className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-        >
-          {state.error}
-        </p>
-      )}
+    <form action={action} onSubmit={handleSubmit} noValidate className="max-w-3xl space-y-6">
+      <FormError className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm">
+        {state?.error ?? formError}
+      </FormError>
       <p className="text-sm text-muted-foreground">
         Täytä perustiedot ja julkaisuasetukset. Tähdellä (*) merkityt kentät ovat pakollisia.
       </p>
@@ -232,24 +255,35 @@ export function ItemForm({
           </p>
         </div>
         <div className="grid gap-4 sm:grid-cols-2">
-          <div className="space-y-1.5">
-            <Label htmlFor="name">Nimi *</Label>
+          <Field label="Nimi" htmlFor="item-name" required error={nameError}>
             <Input
-              id="name"
+              id="item-name"
               name="name"
-              required
               value={name}
               onChange={(e) => {
                 const next = e.target.value;
                 setName(next);
                 if (!slugManuallyEdited) setSlug(slugify(next));
               }}
+              onBlur={() => setTouched((current) => ({ ...current, name: true }))}
+              aria-required="true"
+              aria-invalid={nameError ? true : undefined}
+              aria-describedby={describedBy('item-name', { error: Boolean(nameError) })}
             />
-          </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="slug">Tunnus URL-osoitteessa</Label>
+          </Field>
+          <Field
+            label="Tunnus URL-osoitteessa"
+            htmlFor="item-slug"
+            hint={
+              <>
+                Tuotteen osoite: <span className="font-mono">/{'{slug}'}</span>. Jätä tyhjäksi, niin
+                tunnus muodostetaan nimestä. Käytä pieniä kirjaimia, numeroita ja väliviivoja (ä→a,
+                ö→o). Järjestelmäsivujen nimiä ei voi käyttää tunnuksena.
+              </>
+            }
+          >
             <Input
-              id="slug"
+              id="item-slug"
               name="slug"
               value={slug}
               onChange={(e) => {
@@ -259,14 +293,9 @@ export function ItemForm({
               placeholder="muodostetaan-nimesta"
               spellCheck={false}
               autoCapitalize="none"
-              aria-describedby="slug-help"
+              aria-describedby={describedBy('item-slug', { hint: true })}
             />
-            <p id="slug-help" className="text-xs text-muted-foreground">
-              Tuotteen osoite: <span className="font-mono">/{'{slug}'}</span>. Jätä tyhjäksi, niin
-              tunnus muodostetaan nimestä. Käytä pieniä kirjaimia, numeroita ja väliviivoja (ä→a,
-              ö→o). Järjestelmäsivujen nimiä ei voi käyttää tunnuksena.
-            </p>
-          </div>
+          </Field>
         </div>
       </section>
 
@@ -357,23 +386,30 @@ export function ItemForm({
 
         {!isEvent && (
           <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-1.5">
-              <Label htmlFor="stock">Varastossa (kpl)</Label>
+            <Field
+              label="Varastossa (kpl)"
+              htmlFor="item-stock"
+              hint="Jätä tyhjäksi, jos määrä on rajaton."
+              error={stockError}
+            >
               <Input
-                id="stock"
+                id="item-stock"
                 name="stock"
                 type="number"
                 min="0"
                 step="1"
                 inputMode="numeric"
-                defaultValue={item?.stock?.toString() ?? ''}
+                value={stock}
+                onChange={(event) => setStock(event.target.value)}
+                onBlur={() => setTouched((current) => ({ ...current, stock: true }))}
                 placeholder="Tyhjä = rajoittamaton"
-                aria-describedby="stock-help"
+                aria-invalid={stockError ? true : undefined}
+                aria-describedby={describedBy('item-stock', {
+                  hint: true,
+                  error: Boolean(stockError),
+                })}
               />
-              <p id="stock-help" className="text-xs text-muted-foreground">
-                Jätä tyhjäksi, jos määrä on rajaton.
-              </p>
-            </div>
+            </Field>
             <div className="space-y-1.5">
               <Label htmlFor="sortOrder">Järjestysnumero</Label>
               <Input
@@ -563,10 +599,9 @@ export function ItemForm({
           </div>
         </div>
 
-        <div className="space-y-1.5">
-          <Label htmlFor="description">Kuvaus</Label>
+        <Field label="Kuvaus" htmlFor="item-description">
           <Textarea
-            id="description"
+            id="item-description"
             name="description"
             rows={6}
             defaultValue={item?.description ?? ''}
@@ -576,7 +611,7 @@ export function ItemForm({
                 : 'Kerro tuotteesta, koosta, materiaalista tai muista tärkeistä tiedoista.'
             }
           />
-        </div>
+        </Field>
       </section>
 
       <section className="space-y-4 rounded-lg border bg-card p-5 shadow-sm">
@@ -639,8 +674,12 @@ export function ItemForm({
           </Button>
         </div>
         {variants.length === 1 ? (
-          <div className="space-y-1.5">
-            <Label htmlFor={`variant-price-${variants[0].key}`}>Hinta (€) *</Label>
+          <Field
+            label="Hinta (€)"
+            htmlFor={`variant-price-${variants[0].key}`}
+            required
+            hint="Yksi hinta näkyy tuotteella suoraan ilman variaatiovalintaa."
+          >
             <Input
               id={`variant-price-${variants[0].key}`}
               value={variants[0].price}
@@ -658,11 +697,9 @@ export function ItemForm({
               pattern="[0-9]+([.,][0-9]{1,2})?"
               title="Hinta euroina, esimerkiksi 16 tai 16,00"
               placeholder="16,00"
+              aria-describedby={describedBy(`variant-price-${variants[0].key}`, { hint: true })}
             />
-            <p className="text-xs text-muted-foreground">
-              Yksi hinta näkyy tuotteella suoraan ilman variaatiovalintaa.
-            </p>
-          </div>
+          </Field>
         ) : (
           <div className="space-y-2">
             {variants.map((variant, index) => (

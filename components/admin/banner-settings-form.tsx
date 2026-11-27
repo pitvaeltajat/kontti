@@ -1,14 +1,18 @@
 'use client';
 
-import { useRef, useState, useActionState } from 'react';
+import { useEffect, useRef, useState, useActionState } from 'react';
 import { Upload } from 'lucide-react';
 import { saveSiteSettings } from '@/lib/actions/site';
 import { SiteBanner } from '@/components/site-banner';
 import { KuvatPicker } from '@/components/admin/kuvat-picker';
 import { Button } from '@/components/ui/button';
+import { Field, FormError, describedBy } from '@/components/ui/field';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { LoadingPill } from '@/components/ui/loading-pill';
+import { useToast } from '@/components/ui/toast';
+
+const UPLOAD_ERROR_ID = 'banner-image-upload-error';
 
 export function BannerSettingsForm({
   bannerImageUrl,
@@ -26,6 +30,11 @@ export function BannerSettingsForm({
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const { success } = useToast();
+
+  useEffect(() => {
+    if (state?.ok) success('Banneri tallennettu');
+  }, [state, success]);
 
   async function onPickImage(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -66,19 +75,20 @@ export function BannerSettingsForm({
 
   return (
     <form action={action} className="max-w-2xl space-y-5">
-      {state?.error && (
-        <p className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-          {state.error}
-        </p>
-      )}
+      <FormError className="rounded-md bg-destructive/10 px-3 py-2 text-sm">
+        {state?.error}
+      </FormError>
 
       <input type="hidden" name="bannerImageUrl" value={imageUrl} />
       <input type="hidden" name="bannerPosition" value={`${positionX} ${positionY}`} />
 
-      <div className="space-y-1.5">
-        <Label htmlFor="bannerImageUrl">Bannerin taustakuva</Label>
+      <Field
+        label="Bannerin taustakuva"
+        htmlFor="banner-image-url"
+        hint="Leveä kuva toimii parhaiten (esim. maisema). Kuva häivytetään tekstin taakse. Tyhjänä banneri näkyy ilman taustakuvaa."
+      >
         <Input
-          id="bannerImageUrl"
+          id="banner-image-url"
           type="text"
           inputMode="url"
           spellCheck={false}
@@ -86,12 +96,14 @@ export function BannerSettingsForm({
           value={imageUrl}
           onChange={(e) => setImageUrl(e.target.value)}
           placeholder="https://… tai lataa kuva alta"
+          aria-describedby={describedBy('banner-image-url', { hint: true })}
         />
         <input
           ref={fileRef}
           type="file"
           accept="image/jpeg,image/png,image/webp,image/avif,image/gif"
           className="hidden"
+          aria-describedby={uploadError ? UPLOAD_ERROR_ID : undefined}
           onChange={onPickImage}
         />
         <div className="flex items-center gap-2">
@@ -122,12 +134,8 @@ export function BannerSettingsForm({
             </Button>
           )}
         </div>
-        {uploadError && <p className="text-xs text-destructive">{uploadError}</p>}
-        <p className="text-xs text-muted-foreground">
-          Leveä kuva toimii parhaiten (esim. maisema). Kuva häivytetään tekstin taakse. Tyhjänä
-          banneri näkyy ilman taustakuvaa.
-        </p>
-      </div>
+        <FormError id={UPLOAD_ERROR_ID}>{uploadError}</FormError>
+      </Field>
 
       <div className="space-y-4 rounded-md border bg-background p-4">
         <div>
@@ -151,7 +159,11 @@ export function BannerSettingsForm({
             onChange={(event) => setPositionX(Number(event.target.value))}
             className="w-full accent-[hsl(244,51%,24%)]"
           />
-          <div className="flex justify-between text-xs text-muted-foreground"><span>Vasen</span><span>Keskikohta</span><span>Oikea</span></div>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Vasen</span>
+            <span>Keskikohta</span>
+            <span>Oikea</span>
+          </div>
         </div>
         <div className="space-y-2">
           <div className="flex items-center justify-between text-sm">
@@ -168,7 +180,11 @@ export function BannerSettingsForm({
             onChange={(event) => setPositionY(Number(event.target.value))}
             className="w-full accent-[hsl(244,51%,24%)]"
           />
-          <div className="flex justify-between text-xs text-muted-foreground"><span>Yläosa</span><span>Keskikohta</span><span>Alaosa</span></div>
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>Yläosa</span>
+            <span>Keskikohta</span>
+            <span>Alaosa</span>
+          </div>
         </div>
       </div>
 

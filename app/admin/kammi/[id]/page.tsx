@@ -101,7 +101,13 @@ export default async function AdminKammiBookingPage({
               <input type="hidden" name="id" value={booking.id} />
               <FormButton
                 variant="ghost"
-                confirm={`Perutaanko varaus ${fi(booking.startDate)}–${fi(booking.endDate)}? Päivät vapautuvat.`}
+                confirm={{
+                  title: 'Peru varaus',
+                  description: `Perutaanko varaus ${fi(booking.startDate)}–${fi(booking.endDate)}? Päivät vapautuvat.`,
+                  confirmLabel: 'Peru varaus',
+                  cancelLabel: 'Älä peru',
+                  tone: 'destructive',
+                }}
               >
                 Peru varaus
               </FormButton>
